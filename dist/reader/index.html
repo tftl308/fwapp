@@ -12,6 +12,11 @@
   <style>
     /* ПАЛИТРА ПО УМОЛЧАНИЮ: ТЁПЛАЯ БУМАГА + КИРПИЧНО-ТЕРРАКОТОВЫЕ АККОРДЫ */
     :root {
+      /* ФИРМЕННАЯ ТИПОГРАФИКА ПРОЕКТА: Golos UI Medium для текста, Golos Text Bold для аккордов и интерфейса */
+      --font-family-ui: "Golos Text", "Golos UI", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      --font-family-lyrics: "Golos UI", "Golos Text", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      --font-family-chords: "Golos Text", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+
       --bg-primary: #fcfbf9;
       --bg-secondary: #f4efe6;
       --bg-card: #ffffff;
@@ -99,7 +104,7 @@
       height: 100%;
       overflow-x: hidden !important;
       position: relative;
-      font-family: -apple-system, BlinkMacSystemFont, "Roboto Condensed", "Arial Narrow", "Segoe UI Condensed", "Noto Sans Condensed", sans-serif;
+      font-family: var(--font-family-ui);
       background-color: var(--bg-primary);
       color: var(--text-main);
       line-height: 1.5;
@@ -605,7 +610,7 @@
       display: inline-flex;
       align-items: center;
       gap: 0.25rem;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-family: var(--font-family-ui);
     }
 
     .badge-num {
@@ -615,7 +620,7 @@
       padding: 0.2rem 0.5rem;
       border-radius: 0.3rem;
       font-size: 0.82rem;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-family: var(--font-family-ui);
     }
 
     .badge-type {
@@ -817,9 +822,9 @@
 
     .syllable-chord {
       color: var(--chord-color);
-      font-weight: 900;
+      font-weight: 800;
       font-size: var(--font-chords);
-      font-family: -apple-system, BlinkMacSystemFont, "Roboto Condensed", "Arial Narrow", "Segoe UI Condensed", "Noto Sans Condensed", sans-serif;
+      font-family: var(--font-family-chords);
       min-height: 1.25em;
       line-height: 1.1;
       padding-right: 0.25rem;
@@ -830,7 +835,8 @@
     .syllable-text {
       color: var(--text-main);
       font-size: var(--font-lyrics);
-      font-family: -apple-system, BlinkMacSystemFont, "Roboto Condensed", "Arial Narrow", "Segoe UI Condensed", "Noto Sans Condensed", sans-serif;
+      font-family: var(--font-family-lyrics);
+      font-weight: 500;
       min-height: 1.1em;
       line-height: 1.05;
       white-space: pre;
@@ -1004,7 +1010,7 @@
       font-size: 0.8rem;
       color: var(--text-muted);
       margin-top: 0.4rem;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-family: var(--font-family-ui);
     }
 
     .player-controls-row {
@@ -1176,7 +1182,7 @@
       color: var(--text-muted);
       width: 1.5rem;
       text-align: center;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-family: var(--font-family-ui);
     }
 
     .queue-track-titles {
@@ -1353,13 +1359,17 @@
       color: var(--chord-concert, #c2410c);
       font-size: var(--font-concert);
       line-height: 1.15;
-      font-weight: 900 !important;
+      font-weight: 800 !important;
+      font-family: var(--font-family-chords) !important;
       text-shadow: 0 0 0.5px currentColor;
+      letter-spacing: 0.02em;
     }
 
     .concert-body .syllable-text {
       font-size: var(--font-concert);
       line-height: 1.25;
+      font-family: var(--font-family-lyrics) !important;
+      font-weight: 500;
     }
 
     .concert-body .lyrics-render-line.section-header {
@@ -1611,6 +1621,10 @@
     }
 
 </style>
+  <!-- ТИПОГРАФИКА: Golos Text (Bold) для интерфейса и аккордов, Golos UI (Medium) для текста песен -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
 </head>
 <body data-theme="paper-brick">
 
