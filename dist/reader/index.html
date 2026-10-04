@@ -4778,14 +4778,21 @@ case 'clear-search': {
       case 'save-user-note': {
         const songId = state.currentSongId;
         const text = document.getElementById('input-profile-note')?.value || '';
+        const u1 = document.getElementById('input-song-user1')?.value || '';
+        const u2 = document.getElementById('input-song-user2')?.value || '';
+        const u3 = document.getElementById('input-song-user3')?.value || '';
+
         const song = state.songs.find(s => s.id === songId);
         if (!song) return;
 
-        undoManager.pushState('Изменение заметки песни #' + songId, { songs: state.songs });
+        undoManager.pushState('Изменение заметок песни #' + songId, { songs: state.songs });
 
         const effectiveProfile = (state.currentProfile === 'none') ? 'leader' : state.currentProfile;
         const updatedRawNotes = TaggedNotesHelper.updateNoteForProfile(song.notes || '', effectiveProfile, text);
         song.notes = updatedRawNotes;
+        song.user1 = u1.trim();
+        song.user2 = u2.trim();
+        song.user3 = u3.trim();
 
         const updatedSongs = [...state.songs];
         const sIdx = updatedSongs.findIndex(s => s.id === songId);
@@ -4794,7 +4801,7 @@ case 'clear-search': {
         await storage.putOne('songs', song);
         this.searchEngine.updateIndex(updatedSongs);
         store.setState({ songs: updatedSongs });
-        AppController.showToast('Заметка сохранена под тэгом [' + effectiveProfile + '] в базе данных!');
+        AppController.showToast('✓ Заметка [' + effectiveProfile + '] и метки user1..3 сохранены!');
         break;
       }
 
@@ -6072,9 +6079,20 @@ async handleBatchAudioUpload(files) {
   exportMusicianData() {
     const state = store.getState();
     const taggedNotesMap = {};
+    const songCustomFields = {};
     state.songs.forEach(s => {
-      if (s.notes && s.notes.trim()) {
-        taggedNotesMap[s.id] = s.notes;
+      const hasNotes = s.notes && s.notes.trim();
+      const hasU1 = s.user1 && s.user1.trim();
+      const hasU2 = s.user2 && s.user2.trim();
+      const hasU3 = s.user3 && s.user3.trim();
+
+      if (hasNotes) taggedNotesMap[s.id] = s.notes;
+      if (hasU1 || hasU2 || hasU3) {
+        songCustomFields[s.id] = {
+          user1: s.user1 || '',
+          user2: s.user2 || '',
+          user3: s.user3 || ''
+        };
       }
     });
 
@@ -6082,6 +6100,7 @@ async handleBatchAudioUpload(files) {
       currentProfile: state.currentProfile,
       exported_at: new Date().toISOString(),
       taggedSongNotes: taggedNotesMap,
+      songCustomFields: songCustomFields,
       customPlaylists: state.playlists.filter(p => p.id.startsWith('pl-') && p.id !== 'pl-001'),
       playlistItems: state.playlistItems
     };
@@ -6638,15 +6657,47 @@ async handleBatchAudioUpload(files) {
     const noteInput = Renderer.createElement('textarea', {
       id: 'input-profile-note',
       className: 'input-textarea',
-      placeholder: 'Заметка для роли ' + MUSICIAN_PROFILES.find(p => p.id === effectiveProfile)?.label + ' (хранится в базе под тэгом [' + effectiveProfile + '])...',
+      placeholder: 'Заметка музыканта для роли ' + (MUSICIAN_PROFILES.find(p => p.id === effectiveProfile)?.label || effectiveProfile) + '...',
       rows: 2
     }, [currentNoteText]);
     notesFields.appendChild(noteInput);
 
+    // Дополнительные пользовательские поля и комментарии (user1, user2, user3)
+    const userFieldsWrap = Renderer.createElement('div', {
+      style: 'display: flex; flex-direction: column; gap: 0.4rem; margin-top: 0.25rem; background: var(--bg-card); padding: 0.6rem; border-radius: 6px; border: 1px dashed var(--border-color);'
+    });
+    userFieldsWrap.appendChild(Renderer.createElement('div', { style: 'font-size: 0.75rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase;' }, ['Пользовательские метки и комментарии (user1..3):']));
+
+    const u1Input = Renderer.createElement('input', {
+      id: 'input-song-user1',
+      className: 'input-text',
+      placeholder: 'Метка / комментарий 1 (user1)',
+      value: song.user1 || '',
+      style: 'font-size: 0.82rem; padding: 0.35rem 0.5rem;'
+    });
+    const u2Input = Renderer.createElement('input', {
+      id: 'input-song-user2',
+      className: 'input-text',
+      placeholder: 'Метка / комментарий 2 (user2)',
+      value: song.user2 || '',
+      style: 'font-size: 0.82rem; padding: 0.35rem 0.5rem;'
+    });
+    const u3Input = Renderer.createElement('input', {
+      id: 'input-song-user3',
+      className: 'input-text',
+      placeholder: 'Метка / комментарий 3 (user3)',
+      value: song.user3 || '',
+      style: 'font-size: 0.82rem; padding: 0.35rem 0.5rem;'
+    });
+    userFieldsWrap.appendChild(u1Input);
+    userFieldsWrap.appendChild(u2Input);
+    userFieldsWrap.appendChild(u3Input);
+    notesFields.appendChild(userFieldsWrap);
+
     const saveNoteBtn = Renderer.createElement('button', {
       className: 'btn btn-primary mt-2',
       dataset: { action: 'save-user-note' }
-    }, ['Сохранить заметку роли']);
+    }, ['💾 Сохранить заметку роли и метки user1..3']);
     notesFields.appendChild(saveNoteBtn);
     detailsBox.appendChild(notesFields);
     container.appendChild(detailsBox);
@@ -7378,23 +7429,39 @@ async handleBatchAudioUpload(files) {
     try {
       const text = await file.text();
       const data = JSON.parse(text);
-      if (data.taggedSongNotes) {
+      if (data.taggedSongNotes || data.songCustomFields) {
         const state = store.getState();
         undoManager.pushState('Импорт базы заметок', { songs: state.songs });
 
         const updatedSongs = [...state.songs];
         let count = 0;
-        for (const [sid, noteStr] of Object.entries(data.taggedSongNotes)) {
-          const s = updatedSongs.find(x => x.id === sid);
-          if (s) {
-            s.notes = noteStr;
-            count++;
+
+        if (data.taggedSongNotes) {
+          for (const [sid, noteStr] of Object.entries(data.taggedSongNotes)) {
+            const s = updatedSongs.find(x => x.id === sid);
+            if (s) {
+              s.notes = noteStr;
+              count++;
+            }
           }
         }
+
+        if (data.songCustomFields) {
+          for (const [sid, fields] of Object.entries(data.songCustomFields)) {
+            const s = updatedSongs.find(x => x.id === sid);
+            if (s) {
+              if (fields.user1 !== undefined) s.user1 = fields.user1;
+              if (fields.user2 !== undefined) s.user2 = fields.user2;
+              if (fields.user3 !== undefined) s.user3 = fields.user3;
+            }
+          }
+        }
+
         await storage.saveBatch('songs', updatedSongs);
         this.searchEngine.updateIndex(updatedSongs);
         store.setState({ songs: updatedSongs });
-        AppController.showToast('Успешно импортированы заметки для ' + count + ' песен!');
+        this.renderCurrentView();
+        AppController.showToast('✓ Успешно импортированы заметки и метки для ' + count + ' песен!');
       } else {
         AppController.showToast('Некорректный формат файла заметок');
       }
