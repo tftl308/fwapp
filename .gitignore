@@ -1,0 +1,11 @@
+node_modules/
+.DS_Store
+*.apk
+*.zip
+music/
+uploads/
+tools/shell_zip.b64
+tools/template_shell.b64
+tools/reader_part*.txt
+tools/b64_reader_template.txt
+capacitor-app/

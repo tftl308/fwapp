@@ -1,0 +1,46 @@
+{
+  "version": "4.0.0",
+  "release_date": "2026-10-02T00:21:28.016Z",
+  "audio": [
+    {
+      "filename": "adonai_rehearsal.wav",
+      "song_id": "0000",
+      "type": "запись",
+      "label": "adonai_rehearsal.wav",
+      "size": 132344,
+      "sha256": "6115051e9216362264209f054ad8fe55d5a0cb42ebd745ab64c6520a2c59f14a"
+    },
+    {
+      "filename": "blagodat_demo.wav",
+      "song_id": "0000",
+      "type": "запись",
+      "label": "blagodat_demo.wav",
+      "size": 132344,
+      "sha256": "5186840a5c1316d068fd582b54c6d8867c23d4a41e9d1ed48f289cb12c230636"
+    },
+    {
+      "filename": "blagodat_minus.wav",
+      "song_id": "0000",
+      "type": "запись",
+      "label": "blagodat_minus.wav",
+      "size": 132344,
+      "sha256": "5186840a5c1316d068fd582b54c6d8867c23d4a41e9d1ed48f289cb12c230636"
+    },
+    {
+      "filename": "reka_blagodati_demo.wav",
+      "song_id": "0000",
+      "type": "запись",
+      "label": "reka_blagodati_demo.wav",
+      "size": 132344,
+      "sha256": "a8cbd0a6c3db9612f956c6fcc0f508239993b7108e1e728328df2a08104a0b1e"
+    },
+    {
+      "filename": "velikiy_bog_live.wav",
+      "song_id": "0000",
+      "type": "запись",
+      "label": "velikiy_bog_live.wav",
+      "size": 132344,
+      "sha256": "8a360005a23c6ebb800acc384753d1906a93f3ba5a7fc7cb7f9fc36da05bfcda"
+    }
+  ]
+}

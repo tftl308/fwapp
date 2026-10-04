@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Эмулятор мобильных устройств — Огненный Ветер</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --panel: #1e293b;
+      --text: #f8fafc;
+      --accent: #b45309;
+      --border: #334155;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+    }
+    header {
+      background: var(--panel);
+      border-bottom: 1px solid var(--border);
+      padding: 0.75rem 1.2rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 0.8rem;
+    }
+    .device-controls {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+    .btn {
+      background: #334155;
+      color: #fff;
+      border: 1px solid #475569;
+      padding: 0.4rem 0.8rem;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .btn:hover { background: #475569; }
+    .btn.active {
+      background: var(--accent);
+      border-color: #d97706;
+      font-weight: bold;
+    }
+    .viewport-container {
+      flex: 1;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 1.5rem;
+      overflow: auto;
+      background: #090d16;
+    }
+    .device-frame {
+      background: #000;
+      border-radius: 36px;
+      padding: 12px;
+      box-shadow: 0 25px 60px rgba(0,0,0,0.8), 0 0 0 1px #334155;
+      display: flex;
+      flex-direction: column;
+      transition: width 0.3s ease, height 0.3s ease;
+      position: relative;
+    }
+    .device-notch {
+      width: 110px;
+      height: 18px;
+      background: #000;
+      position: absolute;
+      top: 12px;
+      left: 50%;
+      transform: translateX(-50%);
+      border-bottom-left-radius: 12px;
+      border-bottom-right-radius: 12px;
+      z-index: 10;
+    }
+    iframe {
+      width: 100%;
+      height: 100%;
+      border: none;
+      border-radius: 26px;
+      background: #ffffff;
+    }
+    .info-bar {
+      font-size: 0.8rem;
+      color: #94a3b8;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div style="display: flex; align-items: center; gap: 0.8rem;">
+      <strong style="color: #f59e0b; font-size: 1.1rem;">📱 Device Simulator</strong>
+      <span style="font-size: 0.85rem; color: #94a3b8;">Тестирование адаптивности UI 300–500px</span>
+    </div>
+
+    <div class="device-controls">
+      <button class="btn active" data-w="375" data-h="667" data-name="iPhone SE (375px)">iPhone SE (375px)</button>
+      <button class="btn" data-w="390" data-h="844" data-name="iPhone 13/14 (390px)">iPhone 13/14 (390px)</button>
+      <button class="btn" data-w="360" data-h="800" data-name="Xiaomi / Android (360px)">Android (360px)</button>
+      <button class="btn" data-w="320" data-h="568" data-name="Compact (320px)">Узкий экран (320px)</button>
+      <button class="btn" data-w="768" data-h="1024" data-name="iPad / Tablet (768px)">Планшет (768px)</button>
+      <button class="btn" id="btn-rotate" title="Повернуть в альбомный режим">🔄 Поворот</button>
+    </div>
+
+    <div class="info-bar">
+      <span id="current-device-label">iPhone SE (375 × 667)</span>
+      <button class="btn" onclick="document.getElementById('sim-iframe').contentWindow.location.reload()">⟲ Обновить</button>
+    </div>
+  </header>
+
+  <div class="viewport-container">
+    <div class="device-frame" id="device-frame" style="width: 399px; height: 691px;">
+      <div class="device-notch"></div>
+      <iframe src="../index.html" id="sim-iframe"></iframe>
+    </div>
+  </div>
+
+  <script>
+    let currentW = 375;
+    let currentH = 667;
+    let isLandscape = false;
+    const frame = document.getElementById('device-frame');
+    const label = document.getElementById('current-device-label');
+    const buttons = document.querySelectorAll('.device-controls .btn[data-w]');
+
+    function updateSize() {
+      const targetW = isLandscape ? currentH : currentW;
+      const targetH = isLandscape ? currentW : currentH;
+      frame.style.width = (targetW + 24) + 'px';
+      frame.style.height = (targetH + 24) + 'px';
+      label.textContent = `${targetW} × ${targetH} (${isLandscape ? 'Альбомный' : 'Портретный'})`;
+    }
+
+    buttons.forEach(btn => {
+      btn.addEventListener('click', () => {
+        buttons.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentW = parseInt(btn.dataset.w, 10);
+        currentH = parseInt(btn.dataset.h, 10);
+        isLandscape = false;
+        updateSize();
+      });
+    });
+
+    document.getElementById('btn-rotate').addEventListener('click', () => {
+      isLandscape = !isLandscape;
+      updateSize();
+    });
+  </script>
+</body>
+</html>

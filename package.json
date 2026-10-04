@@ -1,0 +1,25 @@
+{
+  "name": "ognenny-veter",
+  "version": "4.0.0",
+  "description": "Мобильный Терминал Музыканта & Stage Teleprompter",
+  "main": "index.html",
+  "scripts": {
+    "build:data": "node tools/build-data.mjs",
+    "build:pwa": "node tools/build-pwa.mjs",
+    "build:capacitor": "node tools/build-capacitor.mjs",
+    "build": "npm run build:data && node tools/build-index.mjs && npm run build:reader && npm run build:pwa && npm run build:capacitor",
+    "dev:server": "python3 start_offline_server.py --serve-files",
+    "test": "node --test tests/*.mjs",
+    "build:reader": "node tools/build-light-reader.mjs"
+  },
+  "keywords": [
+    "music",
+    "chords",
+    "pwa",
+    "capacitor",
+    "opensong",
+    "chordpro"
+  ],
+  "author": "Огненный ветер",
+  "license": "MIT"
+}

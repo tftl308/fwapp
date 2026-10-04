@@ -1,0 +1,14 @@
+{
+  "appId": "com.ognennyveter.app",
+  "appName": "Огненный Ветер",
+  "webDir": "capacitor-app/www",
+  "bundledWebRuntime": false,
+  "plugins": {
+    "Filesystem": {},
+    "CapacitorSQLite": {
+      "iosDatabaseLocation": "Library/CapacitorDatabase",
+      "iosIsStoreLocation": true,
+      "androidIsStoreLocation": true
+    }
+  }
+}
