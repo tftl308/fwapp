@@ -1,11 +1,11 @@
 {
   "app_version": "4.1.0",
-  "app_build": "20261004160043",
+  "app_build": "20261004163710",
   "data_version": "2026-10-04",
   "min_client_version": "4.0.0",
   "songs_hash": "sha256-4f851b2e3d1b",
   "playlists_hash": "sha256-6e95c7206e1c",
   "notes_hash": "sha256-36b9d8406906",
-  "released_at": "2026-10-04T16:00:43.632Z",
+  "released_at": "2026-10-04T16:37:10.326Z",
   "changelog": "Обновление каталога песен, PWA интеграция GitHub Pages, синхронизация в одну кнопку"
 }
