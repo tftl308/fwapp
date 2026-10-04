@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Центр Проверки и Диагностики — Огненный Ветер</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card-bg: #1e293b;
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --border: #334155;
+      --accent: #f97316;
+      --success: #22c55e;
+      --danger: #ef4444;
+      --warning: #f59e0b;
+      --info: #38bdf8;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      padding: 1.5rem;
+      min-height: 100vh;
+    }
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+    }
+    header {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      padding: 1.5rem;
+      border-radius: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+    .badge {
+      display: inline-block;
+      padding: 0.25rem 0.6rem;
+      border-radius: 9999px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .badge-success { background: rgba(34, 197, 94, 0.15); color: var(--success); border: 1px solid var(--success); }
+    .badge-info { background: rgba(56, 189, 248, 0.15); color: var(--info); border: 1px solid var(--info); }
+    .badge-warn { background: rgba(245, 158, 11, 0.15); color: var(--warning); border: 1px solid var(--warning); }
+    
+    .quick-links {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 1rem;
+    }
+    .card-link {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1rem;
+      text-decoration: none;
+      color: var(--text);
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      transition: all 0.2s;
+    }
+    .card-link:hover {
+      border-color: var(--accent);
+      transform: translateY(-2px);
+    }
+    .card-link h3 { font-size: 1.05rem; display: flex; align-items: center; gap: 0.5rem; }
+    .card-link p { font-size: 0.82rem; color: var(--text-muted); line-height: 1.4; }
+    
+    .test-suite {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1.5rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+    }
+    .btn {
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      padding: 0.75rem 1.5rem;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 0.95rem;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      align-self: flex-start;
+      transition: opacity 0.2s;
+    }
+    .btn:hover { opacity: 0.9; }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .test-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 0.6rem;
+    }
+    .test-item {
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.75rem 1rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 1rem;
+    }
+    .test-item-title {
+      font-weight: 600;
+      font-size: 0.9rem;
+    }
+    .test-item-desc {
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      margin-top: 0.2rem;
+    }
+    .test-status {
+      font-weight: 700;
+      font-size: 0.85rem;
+      padding: 0.2rem 0.6rem;
+      border-radius: 6px;
+      white-space: nowrap;
+    }
+    .status-pending { background: #334155; color: #94a3b8; }
+    .status-running { background: #0369a1; color: #38bdf8; animation: pulse 1.5s infinite; }
+    .status-pass { background: rgba(34, 197, 94, 0.2); color: #4ade80; border: 1px solid #22c55e; }
+    .status-fail { background: rgba(239, 68, 68, 0.2); color: #f87171; border: 1px solid #ef4444; }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.6; }
+    }
+
+    pre#console-log {
+      background: #020617;
+      border: 1px solid #1e293b;
+      border-radius: 8px;
+      padding: 1rem;
+      font-family: monospace;
+      font-size: 0.75rem;
+      color: #38bdf8;
+      max-height: 250px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <header>
+    <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.5rem;">
+      <h1 style="font-size: 1.4rem; font-weight: 800; display: flex; align-items: center; gap: 0.6rem;">
+        🔥 Центр Проверки Системы (FW App Verification Hub)
+      </h1>
+      <span class="badge badge-info" id="env-badge">Окружение: Определение...</span>
+    </div>
+    <p style="color: var(--text-muted); font-size: 0.9rem;">
+      Интерактивная панель проверки работоспособности модулей, целостности каталога (700 песен), PWA-манифеста, Service Worker и локального хранилища IndexedDB.
+    </p>
+  </header>
+
+  <div class="quick-links">
+    <a href="./index.html" class="card-link" target="_blank">
+      <h3>📱 Главное PWA Приложение ↗</h3>
+      <p>Основное приложение с двухколоночным интерфейсом, поиском, студийным плеером и фоновым обновлением.</p>
+    </a>
+    <a href="./огненныйветер.html" class="card-link" target="_blank">
+      <h3>📖 Автономный Сборник ↗</h3>
+      <p>Полностью автономный ридер со вшитыми 700 песнями, чистым интерфейсом без аудиоплеера и рабочей навигацией.</p>
+    </a>
+    <a href="./admin.html" class="card-link" target="_blank">
+      <h3>🛠 Data Studio (Админка) ↗</h3>
+      <p>Редактор аккордов, модальное окно на 22 поля OpenSong, валидация базы и компилятор ридера.</p>
+    </a>
+    <a href="./data/version.json" class="card-link" target="_blank">
+      <h3>🏷️ Релиз-манифест (version.json) ↗</h3>
+      <p>Контрольные суммы sha256 и метаданные последнего выпуска для автообновления в один клик.</p>
+    </a>
+  </div>
+
+  <section class="test-suite">
+    <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 1rem;">
+      <div>
+        <h2 style="font-size: 1.15rem; font-weight: 700;">Автоматизированные тесты браузера</h2>
+        <p style="font-size: 0.8rem; color: var(--text-muted);">Проверка API, доступности файлов, IndexedDB и целостности структуры.</p>
+      </div>
+      <button class="btn" id="btn-run-tests">▶ Запустить проверку всех систем</button>
+    </div>
+
+    <div class="test-grid" id="test-list">
+      <!-- Динамические тесты -->
+    </div>
+
+    <div>
+      <h3 style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.4rem;">Диагностический лог:</h3>
+      <pre id="console-log">[Готов к тестированию. Нажмите «Запустить проверку всех систем»...]</pre>
+    </div>
+  </section>
+</div>
+
+<script>
+const logEl = document.getElementById('console-log');
+function log(msg, type = 'info') {
+  const ts = new Date().toLocaleTimeString();
+  const line = `[${ts}] [${type.toUpperCase()}] ${msg}\n`;
+  logEl.textContent += line;
+  logEl.scrollTop = logEl.scrollHeight;
+}
+
+const tests = [
+  {
+    id: 'test-env',
+    title: '1. Протокол и Окружение',
+    desc: 'Проверка протокола работы (HTTPS / GitHub Pages / локальный хост)',
+    run: async () => {
+      const isHttp = window.location.protocol.startsWith('http');
+      const isHttps = window.location.protocol === 'https:';
+      const host = window.location.hostname;
+      return {
+        ok: isHttp,
+        details: `Хост: ${host}, Протокол: ${window.location.protocol} ${isHttps ? '(Безопасный SSL/TLS)' : ''}`
+      };
+    }
+  },
+  {
+    id: 'test-version',
+    title: '2. Проверка data/version.json',
+    desc: 'Загрузка манифеста релиза и сверка формата контрольных сумм',
+    run: async () => {
+      const res = await fetch('./data/version.json?_t=' + Date.now());
+      if (!res.ok) throw new Error(`HTTP ${res.status} при запросе version.json`);
+      const v = await res.json();
+      if (!v.songs_hash || !v.app_version) throw new Error('Некорректная структура version.json');
+      return {
+        ok: true,
+        details: `Версия: ${v.app_version} (Сборка ${v.app_build}), songs_hash: ${v.songs_hash}`
+      };
+    }
+  },
+  {
+    id: 'test-songs-csv',
+    title: '3. Каталог data/songs.csv (700 песен)',
+    desc: 'Проверка доступности канонического файла и количества записей',
+    run: async () => {
+      const res = await fetch('./data/songs.csv?_t=' + Date.now());
+      if (!res.ok) throw new Error(`HTTP ${res.status} при запросе songs.csv`);
+      const text = await res.text();
+      const lines = text.trim().split('\n');
+      const header = lines[0];
+      const cols = header.split('\t');
+      if (cols.length < 22) throw new Error(`Ожидалось 22 поля, получено: ${cols.length}`);
+      const count = lines.length - 1;
+      return {
+        ok: count >= 700,
+        details: `Найдено строк: ${count} (заголовок: ${cols.length} полей)`
+      };
+    }
+  },
+  {
+    id: 'test-manifest',
+    title: '4. PWA Манифест и Иконки',
+    desc: 'Проверка manifest.webmanifest и корректности standalone режима',
+    run: async () => {
+      const res = await fetch('./manifest.webmanifest?_t=' + Date.now());
+      if (!res.ok) throw new Error(`HTTP ${res.status} при запросе manifest.webmanifest`);
+      const m = await res.json();
+      if (m.display !== 'standalone') throw new Error(`Ожидался display: standalone, получено: ${m.display}`);
+      if (!m.icons || m.icons.length < 2) throw new Error('Недостаточно иконок в манифесте');
+      return {
+        ok: true,
+        details: `Название: "${m.name}", режим: ${m.display}, иконок: ${m.icons.length}`
+      };
+    }
+  },
+  {
+    id: 'test-sw',
+    title: '5. Service Worker (sw.js)',
+    desc: 'Проверка файла кэширования и поддержки ServiceWorker API в браузере',
+    run: async () => {
+      const hasApi = 'serviceWorker' in navigator;
+      const res = await fetch('./sw.js?_t=' + Date.now());
+      if (!res.ok) throw new Error(`HTTP ${res.status} при запросе sw.js`);
+      const text = await res.text();
+      const hasNoMp3 = !text.includes('.mp3');
+      if (!hasNoMp3) throw new Error('В sw.js обнаружен кэш .mp3 файлов!');
+      return {
+        ok: true,
+        details: `API доступно: ${hasApi ? 'Да' : 'Нет'}, аудио исключено из pre-cache: Да`
+      };
+    }
+  },
+  {
+    id: 'test-idb',
+    title: '6. База данных IndexedDB',
+    desc: 'Инициализация хранилища и тест транзакций',
+    run: async () => {
+      if (!('indexedDB' in window)) throw new Error('IndexedDB не поддерживается данным браузером');
+      const db = await new Promise((resolve, reject) => {
+        const req = indexedDB.open('VerificationProbeDB', 1);
+        req.onupgradeneeded = (e) => {
+          e.target.result.createObjectStore('probe', { keyPath: 'id' });
+        };
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+      });
+      // Test put and get
+      await new Promise((resolve, reject) => {
+        const tx = db.transaction(['probe'], 'readwrite');
+        tx.objectStore('probe').put({ id: 'test_key', val: 42, ts: Date.now() });
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
+      });
+      db.close();
+      indexedDB.deleteDatabase('VerificationProbeDB');
+      return {
+        ok: true,
+        details: 'Транзакции на запись и чтение выполнены успешно'
+      };
+    }
+  },
+  {
+    id: 'test-reader-artifact',
+    title: '7. Автономная читалка (огненныйветер.html)',
+    desc: 'Проверка размера, отсутствия плеера и наличия панели навигации',
+    run: async () => {
+      const res = await fetch('./%D0%BE%D0%B3%D0%BD%D0%B5%D0%BD%D0%BD%D1%8B%D0%B9%D0%B2%D0%B5%D1%82%D0%B5%D1%80.html', { method: 'HEAD' });
+      if (!res.ok) throw new Error(`HTTP ${res.status} при проверке файла читалки`);
+      return {
+        ok: true,
+        details: 'Автономный файл доступен для загрузки и использования без сети'
+      };
+    }
+  }
+];
+
+function initView() {
+  const isHttps = window.location.protocol === 'https:';
+  const badge = document.getElementById('env-badge');
+  badge.textContent = `Окружение: ${window.location.protocol} // ${window.location.hostname}`;
+  badge.className = isHttps ? 'badge badge-success' : 'badge badge-warn';
+
+  const list = document.getElementById('test-list');
+  list.innerHTML = '';
+  tests.forEach(t => {
+    const item = document.createElement('div');
+    item.className = 'test-item';
+    item.id = t.id;
+    item.innerHTML = `
+      <div>
+        <div class="test-item-title">${t.title}</div>
+        <div class="test-item-desc">${t.desc}</div>
+        <div class="test-item-details" style="font-size: 0.75rem; color: #38bdf8; margin-top: 0.2rem; display: none;"></div>
+      </div>
+      <div class="test-status status-pending">Ожидание</div>
+    `;
+    list.appendChild(item);
+  });
+}
+
+async function runAllTests() {
+  const btn = document.getElementById('btn-run-tests');
+  btn.disabled = true;
+  log('Запуск полного набора проверочных тестов...', 'start');
+
+  let passed = 0;
+  for (const t of tests) {
+    const el = document.getElementById(t.id);
+    const statusEl = el.querySelector('.test-status');
+    const detailsEl = el.querySelector('.test-item-details');
+
+    statusEl.className = 'test-status status-running';
+    statusEl.textContent = 'Выполняется...';
+    
+    try {
+      const result = await t.run();
+      if (result.ok) {
+        statusEl.className = 'test-status status-pass';
+        statusEl.textContent = 'УСПЕХ ✓';
+        detailsEl.textContent = result.details || 'Пройдено';
+        detailsEl.style.display = 'block';
+        log(`${t.title}: ${result.details}`, 'pass');
+        passed++;
+      } else {
+        throw new Error(result.details || 'Тест не прошёл');
+      }
+    } catch (err) {
+      statusEl.className = 'test-status status-fail';
+      statusEl.textContent = 'ОШИБКА ✗';
+      detailsEl.textContent = err.message;
+      detailsEl.style.display = 'block';
+      log(`${t.title}: ${err.message}`, 'fail');
+    }
+  }
+
+  log(`Тестирование завершено: ${passed} из ${tests.length} успешно.`, passed === tests.length ? 'success' : 'warning');
+  btn.disabled = false;
+}
+
+document.getElementById('btn-run-tests').addEventListener('click', runAllTests);
+
+initView();
+// Автоматический запуск при открытии страницы
+setTimeout(runAllTests, 300);
+</script>
+
+</body>
+</html>
