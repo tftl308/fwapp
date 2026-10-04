@@ -27,5 +27,14 @@
       "type": "image/png",
       "purpose": "maskable"
     }
-  ]
+  ],
+  "display_override": [
+    "window-controls-overlay",
+    "standalone",
+    "fullscreen",
+    "browser"
+  ],
+  "launch_handler": {
+    "client_mode": "focus-existing"
+  }
 }

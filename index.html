@@ -2096,6 +2096,102 @@ class ChordTransposer {
 // ============================================================
 // ПАРСЕР СЛОГОВ И АККОРДОВ (РЕШАЕТ ПРОБЛЕМУ 1 СКРИНА РАЗ И НАВСЕГДА)
 // ============================================================
+// ВСТРОЕННАЯ БАЗА АППЛИКАТУРЫ ГИТАРНЫХ АККОРДОВ
+const GUITAR_CHORD_FINGERINGS = {
+  "C": { frets: [-1, 3, 2, 0, 1, 0], fingers: [0, 3, 2, 0, 1, 0], baseFret: 1 },
+  "Cm": { frets: [-1, 3, 5, 5, 4, 3], fingers: [0, 1, 3, 4, 2, 1], baseFret: 3, barres: [3] },
+  "C7": { frets: [-1, 3, 2, 3, 1, 0], fingers: [0, 3, 2, 4, 1, 0], baseFret: 1 },
+  "D": { frets: [-1, -1, 0, 2, 3, 2], fingers: [0, 0, 0, 1, 3, 2], baseFret: 1 },
+  "Dm": { frets: [-1, -1, 0, 2, 3, 1], fingers: [0, 0, 0, 2, 3, 1], baseFret: 1 },
+  "D7": { frets: [-1, -1, 0, 2, 1, 2], fingers: [0, 0, 0, 2, 1, 3], baseFret: 1 },
+  "Dsus4": { frets: [-1, -1, 0, 2, 3, 3], fingers: [0, 0, 0, 1, 3, 4], baseFret: 1 },
+  "D/F#": { frets: [2, 0, 0, 2, 3, 2], fingers: [1, 0, 0, 2, 4, 3], baseFret: 1 },
+  "E": { frets: [0, 2, 2, 1, 0, 0], fingers: [0, 2, 3, 1, 0, 0], baseFret: 1 },
+  "Em": { frets: [0, 2, 2, 0, 0, 0], fingers: [0, 2, 3, 0, 0, 0], baseFret: 1 },
+  "E7": { frets: [0, 2, 0, 1, 0, 0], fingers: [0, 2, 0, 1, 0, 0], baseFret: 1 },
+  "Esus4": { frets: [0, 2, 2, 2, 0, 0], fingers: [0, 2, 3, 4, 0, 0], baseFret: 1 },
+  "F": { frets: [1, 3, 3, 2, 1, 1], fingers: [1, 3, 4, 2, 1, 1], baseFret: 1, barres: [1] },
+  "Fm": { frets: [1, 3, 3, 1, 1, 1], fingers: [1, 3, 4, 1, 1, 1], baseFret: 1, barres: [1] },
+  "F7": { frets: [1, 3, 1, 2, 1, 1], fingers: [1, 3, 1, 2, 1, 1], baseFret: 1, barres: [1] },
+  "F#": { frets: [2, 4, 4, 3, 2, 2], fingers: [1, 3, 4, 2, 1, 1], baseFret: 2, barres: [2] },
+  "F#m": { frets: [2, 4, 4, 2, 2, 2], fingers: [1, 3, 4, 1, 1, 1], baseFret: 2, barres: [2] },
+  "F#7": { frets: [2, 4, 2, 3, 2, 2], fingers: [1, 3, 1, 2, 1, 1], baseFret: 2, barres: [2] },
+  "G": { frets: [3, 2, 0, 0, 0, 3], fingers: [2, 1, 0, 0, 0, 3], baseFret: 1 },
+  "Gm": { frets: [3, 5, 5, 3, 3, 3], fingers: [1, 3, 4, 1, 1, 1], baseFret: 3, barres: [3] },
+  "G7": { frets: [3, 2, 0, 0, 0, 1], fingers: [3, 2, 0, 0, 0, 1], baseFret: 1 },
+  "A": { frets: [-1, 0, 2, 2, 2, 0], fingers: [0, 0, 1, 2, 3, 0], baseFret: 1 },
+  "Am": { frets: [-1, 0, 2, 2, 1, 0], fingers: [0, 0, 2, 3, 1, 0], baseFret: 1 },
+  "A7": { frets: [-1, 0, 2, 0, 2, 0], fingers: [0, 0, 2, 0, 3, 0], baseFret: 1 },
+  "Asus4": { frets: [-1, 0, 2, 2, 3, 0], fingers: [0, 0, 1, 2, 4, 0], baseFret: 1 },
+  "A/C#": { frets: [-1, 4, 2, 2, 2, 0], fingers: [0, 4, 1, 2, 3, 0], baseFret: 1 },
+  "B": { frets: [-1, 2, 4, 4, 4, 2], fingers: [0, 1, 2, 3, 4, 1], baseFret: 2, barres: [2] },
+  "Bm": { frets: [-1, 2, 4, 4, 3, 2], fingers: [0, 1, 3, 4, 2, 1], baseFret: 2, barres: [2] },
+  "H": { frets: [-1, 2, 4, 4, 4, 2], fingers: [0, 1, 2, 3, 4, 1], baseFret: 2, barres: [2] },
+  "Hm": { frets: [-1, 2, 4, 4, 3, 2], fingers: [0, 1, 3, 4, 2, 1], baseFret: 2, barres: [2] },
+  "Bb": { frets: [-1, 1, 3, 3, 3, 1], fingers: [0, 1, 2, 3, 4, 1], baseFret: 1, barres: [1] },
+  "Bbm": { frets: [-1, 1, 3, 3, 2, 1], fingers: [0, 1, 3, 4, 2, 1], baseFret: 1, barres: [1] }
+};
+
+function renderChordSvg(chordName) {
+  const normChord = chordName.trim().replace(/h/i, 'H');
+  const chordData = GUITAR_CHORD_FINGERINGS[normChord] || GUITAR_CHORD_FINGERINGS[normChord.replace(/m$/, '')] || null;
+
+  if (!chordData) {
+    return `<div style="text-align: center; padding: 1rem; color: var(--text-muted);">Аппликатура для аккорда <strong>${chordName}</strong> в разработке</div>`;
+  }
+
+  const { frets, baseFret, barres } = chordData;
+  const startX = 25;
+  const startY = 30;
+  const stringDist = 18;
+  const fretDist = 22;
+  const width = startX * 2 + stringDist * 5;
+  const height = startY + fretDist * 5 + 15;
+
+  let svg = `<svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" style="display:block; margin: 0 auto;">`;
+  svg += `<text x="${width / 2}" y="18" text-anchor="middle" font-weight="bold" font-size="14" fill="currentColor">${normChord}</text>`;
+
+  if (baseFret > 1) {
+    svg += `<text x="${startX - 12}" y="${startY + 15}" font-size="11" fill="currentColor">${baseFret}fr</text>`;
+  }
+
+  // Лады (горизонтальные линии)
+  for (let f = 0; f <= 4; f++) {
+    const y = startY + f * fretDist;
+    const strokeW = (f === 0 && baseFret === 1) ? 3 : 1;
+    svg += `<line x1="${startX}" y1="${y}" x2="${startX + stringDist * 5}" y2="${y}" stroke="currentColor" stroke-width="${strokeW}"/>`;
+  }
+
+  // Струны (вертикальные линии)
+  for (let s = 0; s < 6; s++) {
+    const x = startX + s * stringDist;
+    svg += `<line x1="${x}" y1="${startY}" x2="${x}" y2="${startY + fretDist * 4}" stroke="currentColor" stroke-width="1"/>`;
+  }
+
+  // Баррэ
+  if (barres && barres.length > 0) {
+    const barreFret = barres[0];
+    const y = startY + (barreFret - 0.5) * fretDist;
+    svg += `<rect x="${startX - 2}" y="${y - 4}" width="${stringDist * 5 + 4}" height="8" rx="4" fill="var(--chord-color)"/>`;
+  }
+
+  // Пальцы / открытые струны / крестики
+  frets.forEach((fret, sIdx) => {
+    const x = startX + sIdx * stringDist;
+    if (fret === -1) {
+      svg += `<text x="${x}" y="${startY - 5}" text-anchor="middle" font-size="11" fill="var(--text-muted)">✕</text>`;
+    } else if (fret === 0) {
+      svg += `<circle cx="${x}" cy="${startY - 7}" r="3.5" fill="none" stroke="currentColor" stroke-width="1.2"/>`;
+    } else {
+      const y = startY + (fret - 0.5) * fretDist;
+      svg += `<circle cx="${x}" cy="${y}" r="5.5" fill="var(--chord-color)"/>`;
+    }
+  });
+
+  svg += `</svg>`;
+  return svg;
+}
+
 class SongParser {
   static parseChordProToSyllables(chordProText) {
     if (!chordProText || typeof chordProText !== 'string') return [];
@@ -2411,85 +2507,78 @@ class SearchEngine {
     const scored = [];
 
     for (const doc of candidates) {
-      let totalScore = 0;
-      let allTermsMatched = true;
+      let titleMatchesCount = 0;
+      let bodyMatchesCount = 0;
+      let anyMatch = false;
+      let score = 0;
 
       for (const term of terms) {
-        let bestTermScore = 0;
+        let matchedInTitle = false;
+        let matchedInBody = false;
 
-        // 1. Совпадение по номеру ID (#0482 или 482)
+        // ID номер песни
         if (term === doc.normId || term === doc.numId) {
-          bestTermScore = Math.max(bestTermScore, 140);
+          matchedInTitle = true;
+          score += 500;
         }
 
-        // 2. Точное вхождение или префикс в заголовке
+        // Поиск в названии
         if (doc.normTitle.includes(term)) {
-          bestTermScore = Math.max(bestTermScore, 80);
-        } else if (doc.normAlt.includes(term)) {
-          bestTermScore = Math.max(bestTermScore, 65);
+          matchedInTitle = true;
+          score += 150;
         } else {
-          // Консонантный поиск и Левенштейн
           for (const tw of doc.titleWords) {
             if (term.length >= 3 && isSubsequence(term, tw)) {
-              bestTermScore = Math.max(bestTermScore, 60);
+              matchedInTitle = true;
+              score += 100;
               break;
             }
-            if (term.length >= 3) {
-              const dist = damerauLevenshtein(term, tw);
-              if (dist <= 1) {
-                bestTermScore = Math.max(bestTermScore, 50);
-                break;
-              } else if (dist <= 2 && term.length >= 5) {
-                bestTermScore = Math.max(bestTermScore, 30);
-                break;
-              }
+            if (term.length >= 3 && damerauLevenshtein(term, tw) <= (term.length >= 5 ? 2 : 1)) {
+              matchedInTitle = true;
+              score += 90;
+              break;
             }
           }
         }
 
-        // 3. Совпадение по тексту песни или автору
-        if (bestTermScore === 0) {
-          if (doc.normBody.includes(term)) {
-            bestTermScore = Math.max(bestTermScore, 25);
-          } else if (doc.normAuthor.includes(term)) {
-            bestTermScore = Math.max(bestTermScore, 25);
-          } else {
-            for (const aw of doc.allWords) {
-              if (term.length >= 3 && isSubsequence(term, aw)) {
-                bestTermScore = Math.max(bestTermScore, 20);
-                break;
-              }
-              if (term.length >= 3) {
-                const maxAllowedDist = term.length >= 5 ? 2 : 1;
-                const d = damerauLevenshtein(term, aw);
-                if (d <= maxAllowedDist) {
-                  bestTermScore = Math.max(bestTermScore, 15 - d * 2);
-                  break;
-                }
-              }
-            }
-          }
-        }
-
-        if (bestTermScore > 0) {
-          totalScore += bestTermScore;
+        // Поиск в тексте
+        if (doc.normBody.includes(term)) {
+          matchedInBody = true;
+          score += 30;
         } else {
-          allTermsMatched = false;
-          break;
+          for (const aw of doc.allWords) {
+            if (term.length >= 3 && isSubsequence(term, aw)) {
+              matchedInBody = true;
+              score += 20;
+              break;
+            }
+            if (term.length >= 3 && damerauLevenshtein(term, aw) <= (term.length >= 5 ? 2 : 1)) {
+              matchedInBody = true;
+              score += 15;
+              break;
+            }
+          }
         }
+
+        if (matchedInTitle) titleMatchesCount++;
+        if (matchedInBody) bodyMatchesCount++;
+        if (matchedInTitle || matchedInBody) anyMatch = true;
       }
 
-      if (allTermsMatched && totalScore > 0) {
-        if (doc.normTitle.includes(normalizedClean)) totalScore += 100;
-        scored.push({ song: doc.song, score: totalScore });
+      if (anyMatch) {
+        // СТРОГАЯ ИЕРАРХИЯ РЕЛЕВАНТНОСТИ:
+        // 1. Максимальное число совпадений в названии (titleMatchesCount * 10000)
+        // 2. Максимальное число совпадений в тексте (bodyMatchesCount * 1000)
+        // 3. Дополнительные баллы за точность
+        let tierScore = (titleMatchesCount * 10000) + (bodyMatchesCount * 1000);
+        if (doc.normTitle.includes(normalizedClean)) tierScore += 5000;
+        else if (doc.normBody.includes(normalizedClean)) tierScore += 500;
+
+        scored.push({ song: doc.song, score: tierScore + score });
       }
     }
 
-    scored.sort((a, b) => {
-      if (b.score !== a.score) return b.score - a.score;
-      return a.song.title.localeCompare(b.song.title, 'ru');
-    });
-
+    scored.sort((a, b) => b.score - a.score);
     return scored.map(s => s.song);
   }
 }
@@ -2797,16 +2886,20 @@ class Renderer {
       } else if (line.type === 'section') {
         container.appendChild(Renderer.createElement('div', { className: 'lyrics-render-line section-header' }, [line.text]));
       } else if (line.type === 'line') {
-        // В режиме концерта: убираем строки, где нет ни одного аккорда!
-        if (isConcertMode) {
-          const hasAnyChord = line.units && line.units.some(u => u.chord && u.chord.trim().length > 0);
-          if (!hasAnyChord) continue;
-        }
+        // В режиме концерта: выводим ВСЕ строки текста (и с аккордами, и без них),
+        // но без лишней высоты над блоком если аккордов нет!
         const lineWrap = Renderer.createElement('div', { className: 'lyrics-render-line' });
 
         for (const unit of line.units) {
           const unitBlock = Renderer.createElement('div', { className: 'syllable-chord-block' });
-          const chordDiv = Renderer.createElement('div', { className: 'syllable-chord' }, [unit.chord || ' ']);
+          const chordAttrs = { className: 'syllable-chord' };
+          // В режиме просмотра песни (не концерт) делаем аккорды интерактивными для просмотра аппликатуры
+          if (!isConcertMode && unit.chord && unit.chord.trim()) {
+            chordAttrs.style = 'cursor: pointer; text-decoration: underline dotted 1px;';
+            chordAttrs.dataset = { action: 'show-chord-diagram', chordName: unit.chord.trim() };
+            chordAttrs.title = 'Нажмите, чтобы увидеть аппликатуру аккорда на грифе';
+          }
+          const chordDiv = Renderer.createElement('div', chordAttrs, [unit.chord || ' ']);
           const textDiv = Renderer.createElement('div', { className: 'syllable-text' }, [unit.text]);
 
           unitBlock.appendChild(chordDiv);
@@ -3850,9 +3943,20 @@ class AppController {
       } else if (act === 'concert-transpose-minus') {
         window.appController.currentSongTranspose = (window.appController.currentSongTranspose || 0) - 1;
         window.appController.renderConcertSong(false);
+      } else if (act === 'concert-transpose-reset') {
+        window.appController.currentSongTranspose = 0;
+        window.appController.renderConcertSong(false);
       } else if (act === 'concert-transpose-plus') {
         window.appController.currentSongTranspose = (window.appController.currentSongTranspose || 0) + 1;
         window.appController.renderConcertSong(false);
+      } else if (act === 'concert-spacing-minus') {
+        let cur = parseFloat(document.documentElement.style.getPropertyValue('--concert-line-margin')) || 0.2;
+        cur = Math.max(0.05, cur - 0.05);
+        document.documentElement.style.setProperty('--concert-line-margin', cur.toFixed(2) + 'rem');
+      } else if (act === 'concert-spacing-plus') {
+        let cur = parseFloat(document.documentElement.style.getPropertyValue('--concert-line-margin')) || 0.2;
+        cur = Math.min(0.8, cur + 0.05);
+        document.documentElement.style.setProperty('--concert-line-margin', cur.toFixed(2) + 'rem');
       } else if (act === 'concert-toggle-theme') {
         const themes = ['paper', 'amber', 'dark'];
         const curTheme = store.getState().concertTheme || 'paper';
@@ -3894,12 +3998,23 @@ class AppController {
     // Тональность
     const transpRow = Renderer.createElement('div', { style: 'display: flex; justify-content: space-between; align-items: center;' }, [
       Renderer.createElement('span', { style: 'font-weight: 600;' }, ['Тональность']),
-      Renderer.createElement('div', { style: 'display: flex; gap: 0.5rem;' }, [
+      Renderer.createElement('div', { style: 'display: flex; gap: 0.35rem; align-items: center;' }, [
         Renderer.createElement('button', { className: 'btn btn-outline btn-sm', dataset: { action: 'concert-transpose-minus' } }, ['-1']),
+        Renderer.createElement('button', { className: 'btn btn-outline btn-sm', dataset: { action: 'concert-transpose-reset' }, title: 'Сбросить в исходную тональность' }, ['+0']),
         Renderer.createElement('button', { className: 'btn btn-outline btn-sm', dataset: { action: 'concert-transpose-plus' } }, ['+1'])
       ])
     ]);
     box.appendChild(transpRow);
+
+    // Межстрочный интервал
+    const spacingRow = Renderer.createElement('div', { style: 'display: flex; justify-content: space-between; align-items: center;' }, [
+      Renderer.createElement('span', { style: 'font-weight: 600;' }, ['Интервал строк']),
+      Renderer.createElement('div', { style: 'display: flex; gap: 0.35rem;' }, [
+        Renderer.createElement('button', { className: 'btn btn-outline btn-sm', dataset: { action: 'concert-spacing-minus' }, title: 'Уменьшить интервал' }, ['Плотнее']),
+        Renderer.createElement('button', { className: 'btn btn-outline btn-sm', dataset: { action: 'concert-spacing-plus' }, title: 'Увеличить интервал' }, ['Шире'])
+      ])
+    ]);
+    box.appendChild(spacingRow);
 
     // Цветовая схема
     const themeRow = Renderer.createElement('div', { style: 'display: flex; justify-content: space-between; align-items: center;' }, [
@@ -4133,6 +4248,73 @@ async setupWakeLock() {
         store.setState({ currentSongId: null });
         break;
 
+            case 'toggle-catalog-sort-filter': {
+        const options = ['По названию (А–Я)', 'По номеру (ID 0001–0700)', 'Только с фонограммами (Audio)', 'Только с текстом'];
+        const choice = prompt('Сортировка и фильтрация каталога:\n1. По названию (А–Я)\n2. По номеру (ID)\n3. Только с фонограммами\n4. Только с текстом\n\nВведите номер (1-4):', '1');
+        if (choice === '2') {
+          const sorted = [...state.songs].sort((a, b) => parseInt(a.id, 10) - parseInt(b.id, 10));
+          store.setState({ songs: sorted });
+          AppController.showToast('Каталог отсортирован по номеру ID');
+        } else if (choice === '3') {
+          const audioSongIds = new Set(state.audio.map(a => a.song_id));
+          const filtered = state.songs.filter(s => audioSongIds.has(s.id));
+          this.searchEngine = new SearchEngine(filtered);
+          store.setState({ songs: filtered });
+          AppController.showToast('Отфильтровано: ' + filtered.length + ' песен с аудио');
+        } else if (choice === '4') {
+          const filtered = state.songs.filter(s => s.body_plain && s.body_plain.trim());
+          this.searchEngine = new SearchEngine(filtered);
+          store.setState({ songs: filtered });
+          AppController.showToast('Отфильтровано: ' + filtered.length + ' песен с текстом');
+        } else if (choice === '1') {
+          const sorted = [...state.songs].sort((a, b) => a.title.localeCompare(b.title, 'ru'));
+          store.setState({ songs: sorted });
+          AppController.showToast('Каталог отсортирован по алфавиту (А–Я)');
+        }
+        break;
+      }
+      case 'show-chord-diagram': {
+        const chordName = el.dataset.chordName;
+        if (!chordName) break;
+        const existing = document.getElementById('chord-diagram-modal');
+        if (existing) existing.remove();
+
+        const modal = Renderer.createElement('div', {
+          id: 'chord-diagram-modal',
+          className: 'qr-modal-overlay',
+          style: 'display: flex; z-index: 300;',
+          dataset: { action: 'close-chord-diagram' }
+        });
+        const box = Renderer.createElement('div', {
+          className: 'update-modal-box',
+          style: 'background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem; max-width: 280px; width: 85%; display: flex; flex-direction: column; gap: 0.75rem; box-shadow: 0 10px 25px rgba(0,0,0,0.4); text-align: center;'
+        });
+        box.addEventListener('click', (e) => e.stopPropagation());
+
+        box.appendChild(Renderer.createElement('div', { style: 'display: flex; justify-content: space-between; align-items: center;' }, [
+          Renderer.createElement('h3', { style: 'margin: 0; font-size: 1.1rem; color: var(--accent);' }, ['Аппликатура: ' + chordName]),
+          Renderer.createElement('button', { className: 'btn btn-outline btn-sm', dataset: { action: 'close-chord-diagram' } }, ['✕'])
+        ]));
+
+        const svgWrap = Renderer.createElement('div', { style: 'margin: 0.5rem 0;' });
+        svgWrap.innerHTML = renderChordSvg(chordName);
+        box.appendChild(svgWrap);
+
+        box.appendChild(Renderer.createElement('button', {
+          className: 'btn btn-outline btn-sm',
+          dataset: { action: 'close-chord-diagram' },
+          style: 'width: 100%;'
+        }, ['Закрыть']));
+
+        modal.appendChild(box);
+        document.body.appendChild(modal);
+        break;
+      }
+      case 'close-chord-diagram': {
+        const m = document.getElementById('chord-diagram-modal');
+        if (m) m.remove();
+        break;
+      }
       case 'open-song': {
         // Если только что был выполнен свайп вправо, не открываем экран песни
         if (typeof swipeTriggered !== 'undefined' && swipeTriggered) break;
@@ -5664,9 +5846,17 @@ async handleBatchAudioUpload(files) {
       className: 'split-col-panel',
       style: window.innerWidth < 860 && state.catalogMobileSubTab === 'setlist' ? 'display: none;' : 'display: flex;'
     });
-    const leftHeader = Renderer.createElement('div', { className: 'split-col-header' }, [
+    const leftHeader = Renderer.createElement('div', { className: 'split-col-header flex items-center justify-between' }, [
       Renderer.createElement('strong', { className: 'text-main' }, ['Каталог песен (' + state.songs.length + ')']),
-      Renderer.createElement('span', { className: 'text-sm text-muted' }, ['А–Я'])
+      Renderer.createElement('div', { className: 'flex items-center gap-2' }, [
+        Renderer.createElement('span', { className: 'text-sm text-muted', style: 'font-weight: 700;' }, ['А–Я']),
+        Renderer.createElement('button', {
+          className: 'btn btn-icon btn-outline btn-sm',
+          dataset: { action: 'toggle-catalog-sort-filter' },
+          title: 'Фильтрация и сортировка каталога',
+          style: 'padding: 0.2rem 0.4rem; font-size: 0.95rem; min-width: 28px; min-height: 28px;'
+        }, ['⚡ ▾'])
+      ])
     ]);
     leftCol.appendChild(leftHeader);
 
