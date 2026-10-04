@@ -2805,8 +2805,13 @@ class UpdateEngine {
         needsData: needsData
       };
 
+      AppLogger.info('UPDATE', `Сверка версии: local=${local.app_build} remote=${remote.app_build} (доступно: ${result.available})`);
+
       if (result.available) {
         UpdateEngine.renderHeaderBadge(result);
+        if (isManual) {
+          UpdateEngine.showUpdateModal(result);
+        }
       } else if (isManual) {
         AppController.showToast('✓ У вас установлена самая свежая версия программы и песен!');
       }
@@ -2961,14 +2966,16 @@ class UpdateEngine {
       }
 
       // Сохраняем новую версию метаданных в IndexedDB
-      await storage.setSetting('app_version_meta', info.remote);
-      await storage.setSetting('db_initialized', true);
+      await storage.saveSetting('app_version_meta', info.remote);
+      await storage.saveSetting('db_initialized', 'true');
+      AppLogger.info('UPDATE', 'Обновление базы успешно завершено: ' + (info.remote.app_build || 'v4.1.0'));
 
       if (statusEl) statusEl.textContent = '4/4. ✓ Успешно обновлено! Перезагрузка...';
       setTimeout(() => {
         window.location.reload();
       }, 800);
     } catch(err) {
+      AppLogger.error('UPDATE', 'Ошибка обновления: ' + err.message);
       if (statusEl) statusEl.textContent = 'Ошибка обновления: ' + err.message;
       if (updateBtn) updateBtn.disabled = false;
     }
@@ -3129,6 +3136,13 @@ class AppController {
           }));
           await storage.saveBatch('songs', songs);
           AppLogger.info('BOOT', 'Каталог успешно инициализирован: ' + songs.length + ' песен.');
+          try {
+            const vRes = await fetch('./data/version.json?_t=' + Date.now(), { cache: 'no-store' });
+            if (vRes.ok) {
+              const vData = await vRes.json();
+              await storage.saveSetting('app_version_meta', vData);
+            }
+          } catch(e) {}
         }
       } catch (err) {
         AppLogger.warn('BOOT', 'Не удалось автоматически загрузить каталог: ' + err.message);
