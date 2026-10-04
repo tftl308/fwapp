@@ -32,7 +32,7 @@
       --nav-height: 4.4rem;
       --font-lyrics: clamp(0.95rem, 3.2vw, 1.15rem);
       --font-chords: clamp(0.95rem, 3.2vw, 1.15rem);
-      --font-concert: clamp(1.4rem, 4.8vw, 2.2rem);
+      --font-concert: clamp(0.95rem, 3.2vw, 1.4rem);
     }
 
     [data-theme="paper-blue"] {
@@ -817,13 +817,14 @@
 
     .syllable-chord {
       color: var(--chord-color);
-      font-weight: 700;
+      font-weight: 900;
       font-size: var(--font-chords);
       font-family: -apple-system, BlinkMacSystemFont, "Roboto Condensed", "Arial Narrow", "Segoe UI Condensed", "Noto Sans Condensed", sans-serif;
       min-height: 1.25em;
       line-height: 1.1;
       padding-right: 0.25rem;
       letter-spacing: 0.02em;
+      text-shadow: 0 0 0.4px currentColor;
     }
 
     .syllable-text {
@@ -1336,8 +1337,12 @@
       width: 100%;
       box-sizing: border-box;
       flex-wrap: wrap;
-      margin-bottom: var(--concert-line-margin, 0.2rem);
+      margin-bottom: var(--concert-line-margin, 0.05rem);
       line-height: 1.05;
+    }
+    .concert-body .lyrics-render-line.no-chords {
+      margin-bottom: var(--concert-line-margin, 0.05rem);
+      line-height: 1.15;
     }
     .concert-body .lyrics-render-line.empty-line {
       height: 0.2rem;
@@ -1348,6 +1353,8 @@
       color: var(--chord-concert, #c2410c);
       font-size: var(--font-concert);
       line-height: 1.15;
+      font-weight: 900 !important;
+      text-shadow: 0 0 0.5px currentColor;
     }
 
     .concert-body .syllable-text {
@@ -2903,25 +2910,39 @@ class Renderer {
       } else if (line.type === 'section') {
         container.appendChild(Renderer.createElement('div', { className: 'lyrics-render-line section-header' }, [line.text]));
       } else if (line.type === 'line') {
-        // В режиме концерта: выводим ВСЕ строки текста (и с аккордами, и без них),
-        // но без лишней высоты над блоком если аккордов нет!
-        const lineWrap = Renderer.createElement('div', { className: 'lyrics-render-line' });
+        // Проверяем, есть ли хоть в одном юните этой строки аккорд
+        const hasAnyChord = line.units && line.units.some(u => u.chord && u.chord.trim().length > 0);
+        const lineWrap = Renderer.createElement('div', {
+          className: 'lyrics-render-line' + (hasAnyChord ? ' has-chords' : ' no-chords')
+        });
 
-        for (const unit of line.units) {
-          const unitBlock = Renderer.createElement('div', { className: 'syllable-chord-block' });
-          const chordAttrs = { className: 'syllable-chord' };
-          // В режиме просмотра песни (не концерт) делаем аккорды интерактивными для просмотра аппликатуры
-          if (!isConcertMode && unit.chord && unit.chord.trim()) {
-            chordAttrs.style = 'cursor: pointer; text-decoration: underline dotted 1px;';
-            chordAttrs.dataset = { action: 'show-chord-diagram', chordName: unit.chord.trim() };
-            chordAttrs.title = 'Нажмите, чтобы увидеть аппликатуру аккорда на грифе';
+        if (!hasAnyChord) {
+          // В строке НЕТ аккордов (например, куплеты/припевы без повтора аккордов)
+          // Выводим только текст друг за другом без пустых верхних блоков под аккорды
+          const textOnly = line.units.map(u => u.text).join('');
+          const textDiv = Renderer.createElement('div', {
+            className: 'syllable-text',
+            style: 'white-space: pre-wrap; width: 100%;'
+          }, [textOnly]);
+          lineWrap.appendChild(textDiv);
+        } else {
+          // В строке ЕСТЬ аккорды: рендерим слоги с аккордами над ними
+          for (const unit of line.units) {
+            const unitBlock = Renderer.createElement('div', { className: 'syllable-chord-block' });
+            const chordAttrs = { className: 'syllable-chord' };
+            // В обычном режиме (не концерт) делаем аккорды интерактивными для просмотра аппликатуры
+            if (!isConcertMode && unit.chord && unit.chord.trim()) {
+              chordAttrs.style = 'cursor: pointer; text-decoration: underline dotted 1px;';
+              chordAttrs.dataset = { action: 'show-chord-diagram', chordName: unit.chord.trim() };
+              chordAttrs.title = 'Нажмите, чтобы увидеть аппликатуру аккорда на грифе';
+            }
+            const chordDiv = Renderer.createElement('div', chordAttrs, [unit.chord || ' ']);
+            const textDiv = Renderer.createElement('div', { className: 'syllable-text' }, [unit.text]);
+
+            unitBlock.appendChild(chordDiv);
+            unitBlock.appendChild(textDiv);
+            lineWrap.appendChild(unitBlock);
           }
-          const chordDiv = Renderer.createElement('div', chordAttrs, [unit.chord || ' ']);
-          const textDiv = Renderer.createElement('div', { className: 'syllable-text' }, [unit.text]);
-
-          unitBlock.appendChild(chordDiv);
-          unitBlock.appendChild(textDiv);
-          lineWrap.appendChild(unitBlock);
         }
 
         container.appendChild(lineWrap);
@@ -3485,7 +3506,7 @@ class AppController {
           e.touches[0].clientY - e.touches[1].clientY
         );
         const scale = currentDist / initialPinchDist;
-        const newSize = Math.max(1.1, Math.min(3.2, initialFontSize * scale));
+        const newSize = Math.max(0.5, Math.min(3.2, initialFontSize * scale));
         store.setState({ concertFontSize: newSize });
         document.documentElement.style.setProperty('--font-concert', newSize + 'rem');
       }
@@ -3913,21 +3934,21 @@ class AppController {
     const availHeight = bodyEl.clientHeight;
     if (availWidth <= 0 || availHeight <= 0) return;
 
-    let fontSize = 1.35; // Начальный размер шрифта rem
-    document.documentElement.style.setProperty('--font-concert', fontSize + 'rem');
-    document.documentElement.style.setProperty('--concert-line-margin', '0.2rem');
+    // Оптимальный компактный расчет для максимального охвата песни на экране телефона
+    let fontSize = 0.95; // Оптимальный компактный шрифт
+    let lineMargin = 0.05; // Минимальная плотность межстрочного интервала
 
-    // Проверяем заполнение по вертикали
+    document.documentElement.style.setProperty('--font-concert', fontSize + 'rem');
+    document.documentElement.style.setProperty('--concert-line-margin', lineMargin + 'rem');
+
+    // Проверяем заполнение по вертикали: если песня всё ещё не помещается, уменьшаем шрифт вплоть до 0.55rem
     let attempts = 0;
-    while (bodyEl.scrollHeight > availHeight && fontSize > 0.8 && attempts < 15) {
-      fontSize -= 0.05;
+    while (bodyEl.scrollHeight > (availHeight + 10) && fontSize > 0.55 && attempts < 12) {
+      fontSize -= 0.04;
       document.documentElement.style.setProperty('--font-concert', fontSize.toFixed(2) + 'rem');
       attempts++;
     }
 
-    if (bodyEl.scrollHeight > availHeight) {
-      document.documentElement.style.setProperty('--concert-line-margin', '0.1rem');
-    }
     store.setState({ concertFontSize: fontSize });
   }
 
@@ -3961,7 +3982,7 @@ class AppController {
         const btn = box.querySelector('[data-action="concert-toggle-autoscroll"]');
         if (btn) btn.textContent = store.getState().isAutoScrolling ? '⏸ Остановить' : '▶ Запустить';
       } else if (act === 'concert-font-minus') {
-        const sz = Math.max(0.9, (store.getState().concertFontSize || 1.6) - 0.15);
+        const sz = Math.max(0.5, (store.getState().concertFontSize || 0.95) - 0.08);
         store.setState({ concertFontSize: sz });
         document.documentElement.style.setProperty('--font-concert', sz + 'rem');
       } else if (act === 'concert-font-plus') {
@@ -3978,11 +3999,11 @@ class AppController {
         window.appController.currentSongTranspose = (window.appController.currentSongTranspose || 0) + 1;
         window.appController.renderConcertSong(false);
       } else if (act === 'concert-spacing-minus') {
-        let cur = parseFloat(document.documentElement.style.getPropertyValue('--concert-line-margin')) || 0.2;
-        cur = Math.max(0.05, cur - 0.05);
+        let cur = parseFloat(document.documentElement.style.getPropertyValue('--concert-line-margin')) || 0.05;
+        cur = Math.max(0.00, cur - 0.03);
         document.documentElement.style.setProperty('--concert-line-margin', cur.toFixed(2) + 'rem');
       } else if (act === 'concert-spacing-plus') {
-        let cur = parseFloat(document.documentElement.style.getPropertyValue('--concert-line-margin')) || 0.2;
+        let cur = parseFloat(document.documentElement.style.getPropertyValue('--concert-line-margin')) || 0.05;
         cur = Math.min(0.8, cur + 0.05);
         document.documentElement.style.setProperty('--concert-line-margin', cur.toFixed(2) + 'rem');
       } else if (act === 'concert-toggle-theme') {
@@ -4860,7 +4881,7 @@ case 'clear-search': {
       }
 
       case 'concert-font-minus': {
-        const sz = Math.max(1.2, state.concertFontSize - 0.15);
+        const sz = Math.max(0.5, (state.concertFontSize || 0.95) - 0.08);
         store.setState({ concertFontSize: sz });
         document.documentElement.style.setProperty('--font-concert', sz + 'rem');
         break;
