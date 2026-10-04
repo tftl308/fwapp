@@ -1336,11 +1336,12 @@
       width: 100%;
       box-sizing: border-box;
       flex-wrap: wrap;
-      margin-bottom: calc(var(--font-concert) * 0.4);
+      margin-bottom: var(--concert-line-margin, 0.2rem);
+      line-height: 1.05;
     }
     .concert-body .lyrics-render-line.empty-line {
-      height: calc(var(--font-concert) * 0.65);
-      margin-bottom: calc(var(--font-concert) * 0.35);
+      height: 0.2rem;
+      margin-bottom: 0.15rem;
     }
 
     .concert-body .syllable-chord {
@@ -2765,7 +2766,7 @@ class Renderer {
   }
 
   // РЕНДЕР СЛОГОВ И АККОРДОВ В ЕДИНЫХ ИНЛАЙН-БЛОКАХ
-  static renderLyrics(container, song, transposeSemitones = 0) {
+  static renderLyrics(container, song, transposeSemitones = 0, isConcertMode = false) {
     container.innerHTML = '';
     const bodyChordpro = (song && song.body_chordpro) ? String(song.body_chordpro) : '';
     if (!bodyChordpro || !bodyChordpro.trim()) {
@@ -2790,10 +2791,17 @@ class Renderer {
 
     for (const line of cleanLines) {
       if (line.type === 'empty') {
-        container.appendChild(Renderer.createElement('div', { className: 'lyrics-render-line empty-line' }));
+        if (!isConcertMode) {
+          container.appendChild(Renderer.createElement('div', { className: 'lyrics-render-line empty-line' }));
+        }
       } else if (line.type === 'section') {
         container.appendChild(Renderer.createElement('div', { className: 'lyrics-render-line section-header' }, [line.text]));
       } else if (line.type === 'line') {
+        // В режиме концерта: убираем строки, где нет ни одного аккорда!
+        if (isConcertMode) {
+          const hasAnyChord = line.units && line.units.some(u => u.chord && u.chord.trim().length > 0);
+          if (!hasAnyChord) continue;
+        }
         const lineWrap = Renderer.createElement('div', { className: 'lyrics-render-line' });
 
         for (const unit of line.units) {
@@ -3037,21 +3045,35 @@ class UpdateEngine {
         }
       } catch(e) {}
 
-      if (statusEl) statusEl.textContent = '3/4. Обновление Service Worker кэша...';
+      if (statusEl) statusEl.textContent = '3/4. Сброс кэша браузера и Service Worker...';
+      // Очищаем HTTP CacheStorage браузера, чтобы не загружались устаревшие страницы
+      if ('caches' in window) {
+        try {
+          const cacheKeys = await caches.keys();
+          for (const key of cacheKeys) {
+            await caches.delete(key);
+          }
+        } catch(e) {}
+      }
       if ('serviceWorker' in navigator) {
-        const reg = await navigator.serviceWorker.getRegistration();
-        if (reg) await reg.update();
+        try {
+          const regs = await navigator.serviceWorker.getRegistrations();
+          for (const reg of regs) {
+            await reg.update();
+          }
+        } catch(e) {}
       }
 
-      // Сохраняем новую версию метаданных в IndexedDB
+      // Сохраняем новую версию метаданных в IndexedDB (заметки музыкантов бережно сохранены)
       await storage.saveSetting('app_version_meta', info.remote);
       await storage.saveSetting('db_initialized', 'true');
       AppLogger.info('UPDATE', 'Обновление базы успешно завершено: ' + (info.remote.app_build || 'v4.1.0'));
 
       if (statusEl) statusEl.textContent = '4/4. ✓ Успешно обновлено! Перезагрузка...';
       setTimeout(() => {
-        window.location.reload();
-      }, 800);
+        // Жесткая перезагрузка страницы в обход кэша
+        window.location.href = window.location.pathname + '?_v=' + Date.now();
+      }, 600);
     } catch(err) {
       AppLogger.error('UPDATE', 'Ошибка обновления: ' + err.message);
       if (statusEl) statusEl.textContent = 'Ошибка обновления: ' + err.message;
@@ -3714,7 +3736,7 @@ class AppController {
     }
   }
 
-  renderConcertSong() {
+  renderConcertSong(shouldAutoFit = true) {
     this.stopAutoScroll();
     const state = store.getState();
     let currentSong = null;
@@ -3755,8 +3777,37 @@ class AppController {
 
     if (bodyEl) {
       bodyEl.innerHTML = '';
-      Renderer.renderLyrics(bodyEl, currentSong, 0);
+      Renderer.renderLyrics(bodyEl, currentSong, this.currentSongTranspose || 0, true);
+      // Динамическая адаптация размера шрифта и межстрочного интервала под высоту и ширину экрана
+      if (shouldAutoFit) {
+        requestAnimationFrame(() => this.fitConcertSongToViewport());
+      }
     }
+  }
+
+  fitConcertSongToViewport() {
+    const bodyEl = document.getElementById('concert-body');
+    if (!bodyEl) return;
+    const availWidth = bodyEl.clientWidth;
+    const availHeight = bodyEl.clientHeight;
+    if (availWidth <= 0 || availHeight <= 0) return;
+
+    let fontSize = 1.35; // Начальный размер шрифта rem
+    document.documentElement.style.setProperty('--font-concert', fontSize + 'rem');
+    document.documentElement.style.setProperty('--concert-line-margin', '0.2rem');
+
+    // Проверяем заполнение по вертикали
+    let attempts = 0;
+    while (bodyEl.scrollHeight > availHeight && fontSize > 0.8 && attempts < 15) {
+      fontSize -= 0.05;
+      document.documentElement.style.setProperty('--font-concert', fontSize.toFixed(2) + 'rem');
+      attempts++;
+    }
+
+    if (bodyEl.scrollHeight > availHeight) {
+      document.documentElement.style.setProperty('--concert-line-margin', '0.1rem');
+    }
+    store.setState({ concertFontSize: fontSize });
   }
 
   showConcertSettingsModal() {
@@ -3775,7 +3826,44 @@ class AppController {
       className: 'update-modal-box',
       style: 'background: var(--bg-card); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.25rem; max-width: 360px; width: 90%; display: flex; flex-direction: column; gap: 1rem; box-shadow: 0 10px 25px rgba(0,0,0,0.4);'
     });
-    box.addEventListener('click', (e) => e.stopPropagation());
+    box.addEventListener('click', (e) => {
+      const actionEl = e.target.closest('[data-action]');
+      if (!actionEl) {
+        e.stopPropagation();
+        return;
+      }
+      const act = actionEl.dataset.action;
+      if (act === 'close-concert-settings') return;
+      // Обрабатываем действия внутри модального окна настроек сцены
+      if (act === 'concert-toggle-autoscroll') {
+        window.appController.toggleAutoScroll();
+        const btn = box.querySelector('[data-action="concert-toggle-autoscroll"]');
+        if (btn) btn.textContent = store.getState().isAutoScrolling ? '⏸ Остановить' : '▶ Запустить';
+      } else if (act === 'concert-font-minus') {
+        const sz = Math.max(0.9, (store.getState().concertFontSize || 1.6) - 0.15);
+        store.setState({ concertFontSize: sz });
+        document.documentElement.style.setProperty('--font-concert', sz + 'rem');
+      } else if (act === 'concert-font-plus') {
+        const sz = Math.min(3.2, (store.getState().concertFontSize || 1.6) + 0.15);
+        store.setState({ concertFontSize: sz });
+        document.documentElement.style.setProperty('--font-concert', sz + 'rem');
+      } else if (act === 'concert-transpose-minus') {
+        window.appController.currentSongTranspose = (window.appController.currentSongTranspose || 0) - 1;
+        window.appController.renderConcertSong(false);
+      } else if (act === 'concert-transpose-plus') {
+        window.appController.currentSongTranspose = (window.appController.currentSongTranspose || 0) + 1;
+        window.appController.renderConcertSong(false);
+      } else if (act === 'concert-toggle-theme') {
+        const themes = ['paper', 'amber', 'dark'];
+        const curTheme = store.getState().concertTheme || 'paper';
+        const nextTheme = themes[(themes.indexOf(curTheme) + 1) % themes.length];
+        store.setState({ concertTheme: nextTheme });
+        const overlay = document.getElementById('concert-overlay');
+        if (overlay) overlay.dataset.concertTheme = nextTheme;
+        AppController.showToast('Тема: ' + nextTheme);
+      }
+      e.stopPropagation();
+    });
 
     const hdr = Renderer.createElement('div', { style: 'display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 0.5rem;' }, [
       Renderer.createElement('h3', { style: 'margin: 0; font-size: 1.05rem; color: var(--accent);' }, ['⚙️ Опции сцены']),
