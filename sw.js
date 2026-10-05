@@ -1,5 +1,5 @@
 // Service Worker для PWA "Огненный Ветер" (GitHub Pages tftl308.github.io)
-const CACHE_NAME = 'ov-cache-v4.1.0-20261004';
+const CACHE_NAME = 'ov-cache-v4.3.0-20261005';
 
 // Кэшируем только файлы приложения (без MP3 музыки!)
 const PRECACHE_ASSETS = [
@@ -44,6 +44,12 @@ self.addEventListener('activate', (event) => {
   );
 });
 
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.action === 'skipWaiting') {
+    self.skipWaiting();
+  }
+});
+
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
 
@@ -52,19 +58,38 @@ self.addEventListener('fetch', (event) => {
     return; // Pass through to network or indexedDB
   }
 
-  // version.json ВСЕГДА запрашиваем сетевым (network-first) для обнаружения обновлений в 1 кнопку
-  if (url.pathname.includes('version.json')) {
+  // version.json и файлы данных (*.csv) ВСЕГДА Network-First с обходом HTTP-кэша!
+  if (url.pathname.includes('version.json') || url.pathname.endsWith('.csv') || url.search.includes('_t=') || url.search.includes('_v=')) {
     event.respondWith(
-      fetch(event.request, { cache: 'no-store' }).catch(() => caches.match(event.request))
+      fetch(event.request, { cache: 'no-store' }).then((networkResponse) => {
+        if (networkResponse && networkResponse.status === 200) {
+          const resClone = networkResponse.clone();
+          caches.open(CACHE_NAME).then((c) => c.put(event.request, resClone));
+        }
+        return networkResponse;
+      }).catch(() => caches.match(event.request))
     );
     return;
   }
 
-  // Для остальных статических файлов: Stale-While-Revalidate или Cache-First
+  // HTML страницы (index.html, ./) также Network-First для мгновенного обнаружения релизов
+  if (event.request.mode === 'navigate' || url.pathname.endsWith('.html') || url.pathname.endsWith('/')) {
+    event.respondWith(
+      fetch(event.request, { cache: 'no-store' }).then((networkResponse) => {
+        if (networkResponse && networkResponse.status === 200) {
+          const resClone = networkResponse.clone();
+          caches.open(CACHE_NAME).then((c) => c.put(event.request, resClone));
+        }
+        return networkResponse;
+      }).catch(() => caches.match(event.request).then(cached => cached || caches.match('./index.html')))
+    );
+    return;
+  }
+
+  // Для остальных статических ассетов (иконки, шрифты): Stale-While-Revalidate
   event.respondWith(
     caches.match(event.request).then((cachedResponse) => {
       if (cachedResponse) {
-        // Фоновое обновление кэша
         fetch(event.request).then((networkResponse) => {
           if (networkResponse && networkResponse.status === 200) {
             caches.open(CACHE_NAME).then((cache) => cache.put(event.request, networkResponse));
