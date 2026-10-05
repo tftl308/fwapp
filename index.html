@@ -18,10 +18,10 @@
       --font-family-chords: "Golos Text", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
 
       --bg-primary: #ffffff;
-      --bg-secondary: #f8f6f0;
+      --bg-secondary: #fdfdfc;
       --bg-card: #ffffff;
-      --bg-card-hover: #faf6ee;
-      --border-color: #ede7dc;
+      --bg-card-hover: #faf9f6;
+      --border-color: #f1ede6;
       --text-main: #1c1917;
       --text-muted: #78716c;
       --accent: #c03000;              /* ПЛАМЕННО-ОГНЕННЫЙ (image-3) */
@@ -1770,7 +1770,7 @@ class TaggedNotesHelper {
     };
     if (!rawNotesStr) return result;
 
-    const regex = /[(leader|vocal|acoustic|piano|bayan|electric|bass|drums)]([^[]*)/gi;
+    const regex = /\[(leader|vocal|acoustic|piano|bayan|electric|bass|drums)\]([^\[]*)/gi;
     let match;
     let hasTags = false;
     const matchedSegments = [];
@@ -5190,65 +5190,6 @@ window.switchChordVariation = function(chordName, vIdx) {
   }
 };
 
-  const normChord = chordName.trim().replace(/h/i, 'H');
-  const chordData = GUITAR_CHORD_FINGERINGS[normChord] || GUITAR_CHORD_FINGERINGS[normChord.replace(/m$/, '')] || null;
-
-  if (!chordData) {
-    return `<div style="text-align: center; padding: 1rem; color: var(--text-muted);">Аппликатура для аккорда <strong>${chordName}</strong> в разработке</div>`;
-  }
-
-  const { frets, baseFret, barres } = chordData;
-  const startX = 25;
-  const startY = 30;
-  const stringDist = 18;
-  const fretDist = 22;
-  const width = startX * 2 + stringDist * 5;
-  const height = startY + fretDist * 5 + 15;
-
-  let svg = `<svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}" style="display:block; margin: 0 auto;">`;
-  svg += `<text x="${width / 2}" y="18" text-anchor="middle" font-weight="bold" font-size="14" fill="currentColor">${normChord}</text>`;
-
-  if (baseFret > 1) {
-    svg += `<text x="${startX - 12}" y="${startY + 15}" font-size="11" fill="currentColor">${baseFret}fr</text>`;
-  }
-
-  // Лады (горизонтальные линии)
-  for (let f = 0; f <= 4; f++) {
-    const y = startY + f * fretDist;
-    const strokeW = (f === 0 && baseFret === 1) ? 3 : 1;
-    svg += `<line x1="${startX}" y1="${y}" x2="${startX + stringDist * 5}" y2="${y}" stroke="currentColor" stroke-width="${strokeW}"/>`;
-  }
-
-  // Струны (вертикальные линии)
-  for (let s = 0; s < 6; s++) {
-    const x = startX + s * stringDist;
-    svg += `<line x1="${x}" y1="${startY}" x2="${x}" y2="${startY + fretDist * 4}" stroke="currentColor" stroke-width="1"/>`;
-  }
-
-  // Баррэ
-  if (barres && barres.length > 0) {
-    const barreFret = barres[0];
-    const y = startY + (barreFret - 0.5) * fretDist;
-    svg += `<rect x="${startX - 2}" y="${y - 4}" width="${stringDist * 5 + 4}" height="8" rx="4" fill="var(--chord-color)"/>`;
-  }
-
-  // Пальцы / открытые струны / крестики
-  frets.forEach((fret, sIdx) => {
-    const x = startX + sIdx * stringDist;
-    if (fret === -1) {
-      svg += `<text x="${x}" y="${startY - 5}" text-anchor="middle" font-size="11" fill="var(--text-muted)">✕</text>`;
-    } else if (fret === 0) {
-      svg += `<circle cx="${x}" cy="${startY - 7}" r="3.5" fill="none" stroke="currentColor" stroke-width="1.2"/>`;
-    } else {
-      const y = startY + (fret - 0.5) * fretDist;
-      svg += `<circle cx="${x}" cy="${y}" r="5.5" fill="var(--chord-color)"/>`;
-    }
-  });
-
-  svg += `</svg>`;
-  return svg;
-}
-
 class SongParser {
   static parseChordProToSyllables(chordProText) {
     if (!chordProText || typeof chordProText !== 'string') return [];
@@ -5442,7 +5383,7 @@ class CsvHelper {
       headers.forEach((h, idx) => {
         let val = row[idx] !== undefined ? row[idx] : '';
         // Автоматическая защита от потери нулей (например Excel '482' -> '0482')
-        if (h === 'id' && /^d{1,4}$/.test(val.trim())) {
+        if (h === 'id' && /^\d{1,4}$/.test(val.trim())) {
           val = val.trim().padStart(4, '0');
         }
         obj[h] = val;
@@ -5462,7 +5403,7 @@ function normalizeSearchText(text) {
   return text.normalize('NFKC').toLowerCase()
     .replace(/ё/g, 'е')
     .replace(/[.,/#!$%^&*;:{}=-_~`()?"'«»—]/g, ' ')
-    .replace(/s+/g, ' ')
+    .replace(/\s+/g, ' ')
     .trim();
 }
 
@@ -6358,31 +6299,60 @@ class UpdateEngine {
 
       if (statusEl) statusEl.textContent = '2/4. Скачивание списков и заметок...';
       try {
-        // Бережно сохраняем пользовательский временный список 'pl-temp' и его состав!
-        const existingPls = await storage.getAll('playlists');
-        const existingItems = await storage.getAll('playlistItems');
-        const userTempPl = existingPls.find(p => p.id === 'pl-temp');
+        // Бережно сохраняем пользовательский временный список 'pl-temp' и его состав, а также созданные пользователем плейлисты!
+        const existingPls = (await storage.getAll('playlists')) || [];
+        const existingItems = (await storage.getAll('playlistItems')) || [];
+        
+        let userTempPl = existingPls.find(p => p.id === 'pl-temp');
+        if (!userTempPl) {
+          userTempPl = {
+            id: 'pl-temp',
+            title: 'Подбор',
+            date: new Date().toISOString().split('T')[0],
+            purpose: 'Быстрый список для репетиции',
+            is_public: '1',
+            is_archived: '0',
+            updated_at: new Date().toISOString()
+          };
+        }
         const userTempItems = existingItems.filter(it => it.playlist_id === 'pl-temp');
-        const customPlaylists = existingPls.filter(p => p.id.startsWith('pl-') && p.id !== 'pl-temp');
+        const customPlaylists = existingPls.filter(p => p.id && p.id !== 'pl-temp' && !['pl-001', 'pl-002'].includes(p.id));
         const customItems = existingItems.filter(it => customPlaylists.some(cp => cp.id === it.playlist_id));
 
+        let remotePls = [];
         const plRes = await fetch('./data/playlists.csv?_t=' + Date.now(), { cache: 'no-store' });
         if (plRes.ok) {
-          const pls = CsvHelper.parse(await plRes.text());
-          for (const p of pls) await storage.putOne('playlists', p);
-        }
-        const plItemsRes = await fetch('./data/playlist_items.csv?_t=' + Date.now(), { cache: 'no-store' });
-        if (plItemsRes.ok) {
-          const its = CsvHelper.parse(await plItemsRes.text());
-          for (const it of its) await storage.putOne('playlistItems', it);
+          remotePls = CsvHelper.parse(await plRes.text()) || [];
         }
 
-        // Восстанавливаем системный 'pl-temp' и пользовательские списки
-        if (userTempPl) await storage.putOne('playlists', userTempPl);
-        for (const it of userTempItems) await storage.putOne('playlistItems', it);
-        for (const cp of customPlaylists) await storage.putOne('playlists', cp);
-        for (const ci of customItems) await storage.putOne('playlistItems', ci);
-      } catch(e) {}
+        let remoteItems = [];
+        const plItemsRes = await fetch('./data/playlist_items.csv?_t=' + Date.now(), { cache: 'no-store' });
+        if (plItemsRes.ok) {
+          remoteItems = CsvHelper.parse(await plItemsRes.text()) || [];
+        }
+
+        // Объединяем плейлисты: системный Подбор + удаленные канонические + пользовательские
+        const mergedPlaylists = [userTempPl];
+        for (const rp of remotePls) {
+          if (rp.id !== 'pl-temp') mergedPlaylists.push(rp);
+        }
+        for (const cp of customPlaylists) {
+          if (!mergedPlaylists.some(p => p.id === cp.id)) mergedPlaylists.push(cp);
+        }
+
+        const mergedItems = [...userTempItems];
+        for (const ri of remoteItems) {
+          mergedItems.push(ri);
+        }
+        for (const ci of customItems) {
+          mergedItems.push(ci);
+        }
+
+        await storage.saveBatch('playlists', mergedPlaylists);
+        await storage.saveBatch('playlistItems', mergedItems);
+      } catch(e) {
+        console.warn('Playlist update merge error:', e);
+      }
 
       if (statusEl) statusEl.textContent = '3/4. Сброс кэша браузера и Service Worker...';
       // Очищаем HTTP CacheStorage браузера, чтобы не загружались устаревшие страницы
@@ -6839,7 +6809,8 @@ class AppController {
     let touchStartY = 0;
     let swipedSongCard = null;
     let isHorizontalSwipe = false;
-    let swipeTriggered = false;
+    this.this.swipeTriggered = false; window._swipeTriggered = false;
+    window._this.swipeTriggered = false; window._swipeTriggered = false;
 
     document.addEventListener('touchstart', (e) => {
       const card = e.target.closest('.song-card');
@@ -6848,7 +6819,7 @@ class AppController {
         touchStartY = e.touches[0].clientY;
         swipedSongCard = card;
         isHorizontalSwipe = false;
-        swipeTriggered = false;
+        this.swipeTriggered = false; window._swipeTriggered = false;
       } else {
         swipedSongCard = null;
       }
@@ -6885,7 +6856,7 @@ class AppController {
       swipedSongCard.style.backgroundColor = '';
 
       if (isHorizontalSwipe && dx > 45 && Math.abs(dy) < 40) {
-        swipeTriggered = true;
+        this.swipeTriggered = true; window._swipeTriggered = true;
         const songId = swipedSongCard.dataset.songId || swipedSongCard.getAttribute('data-drag-song-id');
         if (songId) {
           this.addSongToPlaylist(songId, store.getState().currentPlaylistId);
@@ -6894,7 +6865,7 @@ class AppController {
 
       setTimeout(() => {
         swipedSongCard = null;
-        swipeTriggered = false;
+        this.swipeTriggered = false; window._swipeTriggered = false;
         isHorizontalSwipe = false;
       }, 100);
     }, { passive: true });
@@ -7545,7 +7516,7 @@ async setupWakeLock() {
       }
       case 'open-song': {
         // Если только что был выполнен свайп вправо, не открываем экран песни
-        if (typeof swipeTriggered !== 'undefined' && swipeTriggered) break;
+        if (this.swipeTriggered || window._swipeTriggered) break;
         const songId = el.dataset.songId;
         this.currentSongTranspose = 0;
         store.setState({ currentSongId: songId });
@@ -8710,12 +8681,48 @@ async handleBatchAudioUpload(files) {
     const state = store.getState();
     undoManager.pushState('Добавление песни в список', { playlistItems: state.playlistItems });
 
+    let playlists = [...(state.playlists || [])];
     const targetPlaylistId = playlistId || state.currentPlaylistId || 'pl-temp';
-    // Проверяем, существует ли целевой список в базе, если нет — гарантированно создаем/направляем в 'pl-temp'
-    let plExists = state.playlists.some(p => p.id === targetPlaylistId);
-    let effectivePlId = plExists ? targetPlaylistId : 'pl-temp';
 
-    const curItems = state.playlistItems
+    // Гарантируем, что целевой список существует в памяти и IndexedDB
+    let pl = playlists.find(p => p.id === targetPlaylistId);
+    let effectivePlId = targetPlaylistId;
+
+    if (!pl) {
+      if (effectivePlId === 'pl-temp') {
+        pl = {
+          id: 'pl-temp',
+          title: 'Подбор',
+          date: new Date().toISOString().split('T')[0],
+          purpose: 'Быстрый список для репетиции',
+          is_public: '1',
+          is_archived: '0',
+          updated_at: new Date().toISOString()
+        };
+        playlists.unshift(pl);
+        await storage.saveBatch('playlists', playlists);
+        store.setState({ playlists, currentPlaylistId: 'pl-temp' });
+      } else {
+        effectivePlId = 'pl-temp';
+        pl = playlists.find(p => p.id === 'pl-temp');
+        if (!pl) {
+          pl = {
+            id: 'pl-temp',
+            title: 'Подбор',
+            date: new Date().toISOString().split('T')[0],
+            purpose: 'Быстрый список для репетиции',
+            is_public: '1',
+            is_archived: '0',
+            updated_at: new Date().toISOString()
+          };
+          playlists.unshift(pl);
+          await storage.saveBatch('playlists', playlists);
+          store.setState({ playlists, currentPlaylistId: 'pl-temp' });
+        }
+      }
+    }
+
+    const curItems = (state.playlistItems || [])
       .filter(it => it.playlist_id === effectivePlId)
       .sort((a, b) => parseInt(a.order, 10) - parseInt(b.order, 10));
 
@@ -8737,14 +8744,14 @@ async handleBatchAudioUpload(files) {
 
     curItems.forEach((it, idx) => { it.order = (idx + 1).toString(); });
 
-    const otherItems = state.playlistItems.filter(it => it.playlist_id !== effectivePlId);
+    const otherItems = (state.playlistItems || []).filter(it => it.playlist_id !== effectivePlId);
     const updated = [...otherItems, ...curItems];
 
     await storage.saveBatch('playlistItems', updated);
     store.setState({ playlistItems: updated });
     await this.touchPlaylistTimestamp(effectivePlId);
 
-    const s = state.songs.find(x => x.id === songId);
+    const s = (state.songs || []).find(x => x.id === songId);
     AppController.showToast('✓ Добавлено: ' + (s ? s.title : '#' + songId));
   }
 
@@ -9019,7 +9026,7 @@ async handleBatchAudioUpload(files) {
           if (titleMatch && !importedTitle) {
             importedTitle = titleMatch[1].replace(/\(.*\)/, '').trim();
           }
-          const m = line.match(/#(d{4})/) || line.match(/^(\d+)[.\s]+#?(\d{1,4})/);
+          const m = line.match(/#(\d{4})/) || line.match(/^(\d+)[.\s]+#?(\d{1,4})/);
           if (m) {
             const num = m[1] || m[2];
             songIds.push(String(num).padStart(4, '0'));
@@ -9290,7 +9297,7 @@ async handleBatchAudioUpload(files) {
             if (termIdx !== -1) {
               const start = Math.max(0, termIdx - 25);
               const end = Math.min(song.body_plain.length, termIdx + term.length + 50);
-              snippetText = (start > 0 ? '… ' : '') + song.body_plain.slice(start, end).replace(/s+/g, ' ') + (end < song.body_plain.length ? ' …' : '');
+              snippetText = (start > 0 ? '… ' : '') + song.body_plain.slice(start, end).replace(/\s+/g, ' ') + (end < song.body_plain.length ? ' …' : '');
               break;
             }
           }
@@ -9734,7 +9741,7 @@ async handleBatchAudioUpload(files) {
       const grid = Renderer.createElement('div', { className: 'audio-variants-compact-row' });
       for (const aud of songAudios) {
         const isCurrent = state.activeAudio && state.activeAudio.id === aud.id;
-        const audLabel = aud.filename ? aud.filename.replace(/^d{4}_[a-zA-Z0-9а-яА-ЯёЁ]+_/, '').replace(/.[^/.]+$/, '') : (aud.label || aud.type);
+        const audLabel = aud.filename ? aud.filename.replace(/^\d{4}_[a-zA-Z0-9а-яА-ЯёЁ]+_/, '').replace(/.[^/.]+$/, '') : (aud.label || aud.type);
         const btn = Renderer.createElement('button', {
           className: 'audio-pill-btn ' + (isCurrent ? 'active' : ''),
           dataset: { action: 'play-song-variant', audioId: aud.id },
@@ -10774,12 +10781,12 @@ async handleBatchAudioUpload(files) {
       } else {
         const lines = text.split(/\r?\n/);
         for (const line of lines) {
-          const m = line.match(/#(d{4})/) || line.match(/^(d+)[.s]+#?(d{1,4})/);
+          const m = line.match(/#(\d{4})/) || line.match(/^(\d+)[.\s]+#?(\d{1,4})/);
           if (m) {
             const num = m[1] || m[2];
             songIds.push(String(num).padStart(4, '0'));
           } else {
-            const numOnly = line.match(/^(d{1,4})[.s]+/);
+            const numOnly = line.match(/^(\d{1,4})[.\s]+/);
             if (numOnly) {
               songIds.push(String(numOnly[1]).padStart(4, '0'));
             }
@@ -11056,7 +11063,7 @@ async handleBatchAudioUpload(files) {
           if (titleMatch && !importedTitle) {
             importedTitle = titleMatch[1].replace(/\(.*\)/, '').trim();
           }
-          const m = line.match(/#(d{4})/) || line.match(/^(\d+)[.\s]+#?(\d{1,4})/);
+          const m = line.match(/#(\d{4})/) || line.match(/^(\d+)[.\s]+#?(\d{1,4})/);
           if (m) {
             const num = m[1] || m[2];
             songIds.push(String(num).padStart(4, '0'));
