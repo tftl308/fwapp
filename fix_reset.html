@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Сброс кэша и восстановление Огненный Ветер</title>
+  <style>
+    body { font-family: sans-serif; padding: 2rem; max-width: 600px; margin: 0 auto; line-height: 1.5; background: #faf9f6; color: #1c1917; }
+    .card { background: white; padding: 1.5rem; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.08); border: 1px solid #e7e2d9; }
+    button { background: #c03000; color: white; border: none; padding: 0.75rem 1.25rem; font-size: 1rem; font-weight: bold; border-radius: 6px; cursor: pointer; width: 100%; margin-top: 1rem; }
+    button:active { background: #902000; }
+    .log { background: #1c1917; color: #4ade80; padding: 1rem; border-radius: 6px; font-family: monospace; font-size: 0.85rem; margin-top: 1rem; max-height: 200px; overflow-y: auto; white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h2>🛠 Аварийный сброс кэша и Service Worker</h2>
+    <p>Если в браузере или мобильном PWA застряла старая повреждённая версия, нажмите кнопку ниже для полной очистки старого Service Worker, баз IndexedDB и кэша.</p>
+    <button onclick="runHardReset()">ОЧИСТИТЬ КЭШ И ЗАПУСТИТЬ ПРИЛОЖЕНИЕ</button>
+    <div id="log" class="log" style="display:none;"></div>
+  </div>
+
+  <script>
+    async function runHardReset() {
+      const logEl = document.getElementById('log');
+      logEl.style.display = 'block';
+      function log(msg) { logEl.textContent += msg + '\n'; }
+
+      log('1. Остановка и удаление Service Worker...');
+      if ('serviceWorker' in navigator) {
+        try {
+          const regs = await navigator.serviceWorker.getRegistrations();
+          for (const reg of regs) {
+            await reg.unregister();
+            log('   ✓ Service Worker отключен');
+          }
+        } catch(e) { log('   ! SW: ' + e.message); }
+      }
+
+      log('2. Очистка кэша CacheStorage...');
+      if ('caches' in window) {
+        try {
+          const keys = await caches.keys();
+          for (const k of keys) {
+            await caches.delete(k);
+            log('   ✓ Удален кэш: ' + k);
+          }
+        } catch(e) { log('   ! Cache: ' + e.message); }
+      }
+
+      log('3. Очистка локальных хранилищ...');
+      try { localStorage.clear(); log('   ✓ localStorage очищен'); } catch(e) {}
+      try { sessionStorage.clear(); log('   ✓ sessionStorage очищен'); } catch(e) {}
+
+      log('4. Очистка старых баз IndexedDB...');
+      if ('indexedDB' in window && indexedDB.deleteDatabase) {
+        ['OfflineSongbookDB_v12', 'OfflineSongbookDB_v11', 'OfflineSongbookDB_v10', 'OfflineSongbookDB_v9'].forEach(db => {
+          try { indexedDB.deleteDatabase(db); } catch(e) {}
+        });
+        log('   ✓ Устаревшие базы IndexedDB сброшены');
+      }
+
+      log('5. Переход на чистую версию index.html...');
+      setTimeout(() => {
+        window.location.replace('./index.html?_v=' + Date.now());
+      }, 1000);
+    }
+  </script>
+</body>
+</html>
