@@ -5761,11 +5761,13 @@ class AudioPlayerService {
       store.setState({ isPlaying: false });
     });
 
-    if ('mediaSession' in navigator) {
-      navigator.mediaSession.setActionHandler('play', () => this.play());
-      navigator.mediaSession.setActionHandler('pause', () => this.pause());
-      navigator.mediaSession.setActionHandler('nexttrack', () => this.playNext());
-      navigator.mediaSession.setActionHandler('previoustrack', () => this.playPrev());
+    if (typeof navigator !== 'undefined' && 'mediaSession' in navigator && navigator.mediaSession) {
+      try {
+        navigator.mediaSession.setActionHandler('play', () => this.play());
+        navigator.mediaSession.setActionHandler('pause', () => this.pause());
+        navigator.mediaSession.setActionHandler('nexttrack', () => this.playNext());
+        navigator.mediaSession.setActionHandler('previoustrack', () => this.playPrev());
+      } catch(e) {}
     }
   }
 
@@ -6483,15 +6485,22 @@ class AppController {
       if (installBtn) installBtn.style.display = 'inline-flex';
     });
 
-    await storage.init();
-    await this.loadInitialData();
-    // Фоновая проверка обновлений с GitHub Pages (tftl308.github.io)
-    setTimeout(() => UpdateEngine.checkForUpdates(false), 1500);
+    // Первым делом регистрируем обработчики кликов и навигации!
     this.setupDelegatedEvents();
     this.setupKeyboardAndPedals();
     this.setupWakeLock();
     this.setupConcertTouchGestures();
     this.setupHistoryBackNavigation();
+
+    try {
+      await storage.init();
+      await this.loadInitialData();
+    } catch(err) {
+      console.error('Storage init fallback:', err);
+    }
+
+    // Фоновая проверка обновлений с GitHub Pages
+    setTimeout(() => UpdateEngine.checkForUpdates(false), 1500);
 
     const savedTheme = await storage.getSetting('theme') || 'paper-brick';
     const savedNotation = await storage.getSetting('notation') || 'H';
@@ -11205,10 +11214,18 @@ async handleBatchAudioUpload(files) {
   }
 }
 
-document.addEventListener('DOMContentLoaded', () => {
+function bootApp() {
+  if (window._appBooted) return;
+  window._appBooted = true;
   window.appController = new AppController();
   window.appController.init();
-});
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', bootApp);
+} else {
+  bootApp();
+}
 </script>
 </body>
 </html>
