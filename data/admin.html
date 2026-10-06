@@ -1654,6 +1654,30 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     }
 
     
+    
+    function realignSongModel(songModel) {
+      if (!songModel || !songModel.lines) return;
+      songModel.lines.forEach(line => {
+        if (line.lyric && line.chords && line.chords.length > 0) {
+          const xs = computeCharXPositions(line.lyric);
+          const snaps = buildLyricSnapPoints(line.lyric, xs);
+          const chordTokens = line.chords.map(c => ({
+            text: c.name || c.chord || '',
+            x: xs[c.charIndex] || measureTextWidth(line.lyric.substring(0, c.charIndex)),
+            rawCol: c.charIndex
+          }));
+          const newIndices = alignChordsDP(chordTokens, snaps);
+          line.chords.forEach((c, idx) => {
+            if (newIndices[idx] !== undefined) {
+              c.charIndex = newIndices[idx];
+              const targetX = xs[c.charIndex] || c.charIndex * 8;
+              c.confidence = computeChordConfidence(chordTokens[idx].x, targetX);
+            }
+          });
+        }
+      });
+    }
+
     function computeDefaultPresentation(song) {
       if (!song || !song.lines) return '';
       const order = [];
@@ -2009,14 +2033,17 @@ ${lyricsBody}
         }
 
         // 1. Проверяем маркеры секций:
+        // Нормализуем неразрывные пробелы и множественные пробелы в начале
+        const normLine = trimmed.replace(/[\u00a0\u200b\t]+/g, ' ').trim();
+
         // Куплеты: "1.", "2.", "3.", "Куплет 1" -> [V1], [V2]...
-        // Припевы: "Пр.", "Пр:", "Припев" -> [C]
-        // Бриджи: "Бр.", "Бр:", "Бридж" -> [B]
-        const mVerseNum = trimmed.match(/^(\d+)\.\s*(.*)$/);
-        const mChorus = trimmed.match(/^(?:пр\.|пр:|припев:?|chorus:?|\[c\])\s*(.*)$/i);
-        const mBridge = trimmed.match(/^(?:бр\.|бр:|бридж:?|bridge:?|\[b\])\s*(.*)$/i);
-        const mExplicitTag = trimmed.match(/^\[(V\d+|C|B|T|E|Intro|Outro)\]\s*(.*)$/i);
-        const mWordVerse = trimmed.match(/^(?:куплет\s*(\d*)|verse\s*(\d*))[\s\.:]*(.*)$/i);
+        // Припевы: "Пр.", "Пр:", "Пр", "Припев" -> [C]
+        // Бриджи: "Бр.", "Бр:", "Бр", "Бридж" -> [B]
+        const mVerseNum = normLine.match(/^(\d+)[\.\)]\s*(.*)$/);
+        const mChorus = normLine.match(/^(?:припев[\.:]?|пр[\.:]?|chorus[\.:]?|\[c\])\s*(.*)$/i);
+        const mBridge = normLine.match(/^(?:бридж[\.:]?|бр[\.:]?|bridge[\.:]?|\[b\])\s*(.*)$/i);
+        const mExplicitTag = normLine.match(/^\[(V\d+|C|B|T|E|Intro|Outro)\]\s*(.*)$/i);
+        const mWordVerse = normLine.match(/^(?:куплет\s*(\d*)|verse\s*(\d*))[\s\.:]*(.*)$/i);
 
         if (mVerseNum) {
           const num = mVerseNum[1];
@@ -2267,6 +2294,9 @@ ${lyricsBody}
       if (!song.presentation) {
         song.presentation = computeDefaultPresentation(song);
       }
+
+      // Requirement: btn-realign-current-song is embedded into the core algorithm for all songs
+      realignSongModel(song);
 
       return song;
     }
@@ -3437,28 +3467,9 @@ ${lyricsBody}
         alert('Нет выбранной песни для выравнивания.');
         return;
       }
-      // Re-run dynamic programming on all verse lines
-      activeSongModel.lines.forEach(line => {
-        if (line.lyric && line.chords && line.chords.length > 0) {
-          const xs = computeCharXPositions(line.lyric);
-          const snaps = buildLyricSnapPoints(line.lyric, xs);
-          const chordTokens = line.chords.map(c => ({
-            text: c.name,
-            x: xs[c.charIndex] || measureTextWidth(line.lyric.substring(0, c.charIndex)),
-            rawCol: c.charIndex
-          }));
-          const newIndices = alignChordsDP(chordTokens, snaps);
-          line.chords.forEach((c, idx) => {
-            if (newIndices[idx] !== undefined) {
-              c.charIndex = newIndices[idx];
-              const targetX = xs[c.charIndex] || c.charIndex * 8;
-              c.confidence = computeChordConfidence(chordTokens[idx].x, targetX);
-            }
-          });
-        }
-      });
-
+      realignSongModel(activeSongModel);
       renderInteractiveEditor(activeSongModel);
+      updateAllLivePreviews();
       alert('Автоматическое перевыравнивание выполнено!');
     });
 
