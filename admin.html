@@ -1653,6 +1653,31 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       return lines.join('\n');
     }
 
+    
+    function computeDefaultPresentation(song) {
+      if (!song || !song.lines) return '';
+      const order = [];
+      let currentSection = '';
+
+      for (const line of song.lines) {
+        let secKey = '';
+        if (line.kind === 'section-header' || line.kind === 'chorus-header' || (line.kind && line.kind.startsWith('['))) {
+          const match = (line.lyric || line.kind).match(/\[(.*?)\]/);
+          secKey = match ? match[1].trim() : (line.lyric || line.kind).trim();
+        } else if (line.sectionKey) {
+          secKey = line.sectionKey;
+        }
+
+        if (secKey && secKey !== currentSection) {
+          currentSection = secKey;
+          order.push(secKey);
+        }
+      }
+
+      // If presentation is empty, but we have sections (e.g. V1, C, V2, B)
+      return order.join(' ');
+    }
+
     function serializeSongToOpenSongLyrics(song) {
       const outputLines = [];
       let currentSection = '';
@@ -1711,11 +1736,13 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       const escapeXml = (str) => String(str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
       const lyricsBody = serializeSongToOpenSongLyrics(song);
 
+      const presentationVal = song.presentation || computeDefaultPresentation(song) || '';
       return `<?xml version="1.0" encoding="UTF-8"?>
 <song>
   <title>${escapeXml(song.title)}</title>
   <author>${escapeXml(song.author || 'Огненный ветер')}</author>
   <copyright>${escapeXml(song.album || '')}</copyright>
+  <presentation>${escapeXml(presentationVal)}</presentation>
   <key>${escapeXml(song.key_default || '')}</key>
   <capo print="true">${escapeXml(song.capo || '')}</capo>
   <tempo>${escapeXml(song.tempo || '')}</tempo>
@@ -1966,6 +1993,10 @@ ${lyricsBody}
 
       const bodyLines = rawLines.slice(headerLinesCount);
       let i = 0;
+      let currentSectionKind = 'verse-1';
+      let currentSectionKey = 'V1';
+      let hasExplicitSections = false;
+      let hasStartedFirstVerse = false;
 
       while (i < bodyLines.length) {
         const currentLine = bodyLines[i];
@@ -1977,12 +2008,136 @@ ${lyricsBody}
           continue;
         }
 
-        // Section markers check
-        if (/^(куплет|припев|бридж|вступление|проигрыш|кода|verse|chorus|bridge|intro|outro)/i.test(trimmed)) {
-          const kind = /припев|chorus/i.test(trimmed) ? 'chorus' : (/бридж|bridge/i.test(trimmed) ? 'bridge' : 'verse');
-          song.lines.push({ kind: kind, lyric: trimmed, chords: [] });
+        // 1. Проверяем маркеры секций:
+        // Куплеты: "1.", "2.", "3.", "Куплет 1" -> [V1], [V2]...
+        // Припевы: "Пр.", "Пр:", "Припев" -> [C]
+        // Бриджи: "Бр.", "Бр:", "Бридж" -> [B]
+        const mVerseNum = trimmed.match(/^(\d+)\.\s*(.*)$/);
+        const mChorus = trimmed.match(/^(?:пр\.|пр:|припев:?|chorus:?|\[c\])\s*(.*)$/i);
+        const mBridge = trimmed.match(/^(?:бр\.|бр:|бридж:?|bridge:?|\[b\])\s*(.*)$/i);
+        const mExplicitTag = trimmed.match(/^\[(V\d+|C|B|T|E|Intro|Outro)\]\s*(.*)$/i);
+        const mWordVerse = trimmed.match(/^(?:куплет\s*(\d*)|verse\s*(\d*))[\s\.:]*(.*)$/i);
+
+        if (mVerseNum) {
+          const num = mVerseNum[1];
+          const rest = mVerseNum[2];
+          hasExplicitSections = true;
+          currentSectionKey = 'V' + num;
+          currentSectionKind = 'verse-' + num;
+          song.lines.push({
+            kind: 'section-header',
+            sectionKey: currentSectionKey,
+            lyric: '[' + currentSectionKey + ']',
+            chords: []
+          });
+          if (rest) {
+            bodyLines[i] = rest;
+            continue;
+          }
           i++;
           continue;
+        } else if (mChorus) {
+          const rest = mChorus[1];
+          hasExplicitSections = true;
+          currentSectionKey = 'C';
+          currentSectionKind = 'chorus';
+          song.lines.push({
+            kind: 'chorus-header',
+            sectionKey: 'C',
+            lyric: '[C]',
+            chords: []
+          });
+          if (rest) {
+            bodyLines[i] = rest;
+            continue;
+          }
+          i++;
+          continue;
+        } else if (mBridge) {
+          const rest = mBridge[1];
+          hasExplicitSections = true;
+          currentSectionKey = 'B';
+          currentSectionKind = 'bridge';
+          song.lines.push({
+            kind: 'section-header',
+            sectionKey: 'B',
+            lyric: '[B]',
+            chords: []
+          });
+          if (rest) {
+            bodyLines[i] = rest;
+            continue;
+          }
+          i++;
+          continue;
+        } else if (mExplicitTag) {
+          const tag = mExplicitTag[1].toUpperCase();
+          const rest = mExplicitTag[2];
+          hasExplicitSections = true;
+          currentSectionKey = tag;
+          currentSectionKind = tag.startsWith('C') ? 'chorus' : (tag.startsWith('B') ? 'bridge' : 'verse');
+          song.lines.push({
+            kind: tag.startsWith('C') ? 'chorus-header' : 'section-header',
+            sectionKey: tag,
+            lyric: '[' + tag + ']',
+            chords: []
+          });
+          if (rest) {
+            bodyLines[i] = rest;
+            continue;
+          }
+          i++;
+          continue;
+        } else if (mWordVerse && !isChordLine(trimmed)) {
+          const vnum = mWordVerse[1] || mWordVerse[2] || '1';
+          const rest = mWordVerse[3];
+          hasExplicitSections = true;
+          currentSectionKey = 'V' + vnum;
+          currentSectionKind = 'verse-' + vnum;
+          song.lines.push({
+            kind: 'section-header',
+            sectionKey: currentSectionKey,
+            lyric: '[' + currentSectionKey + ']',
+            chords: []
+          });
+          if (rest) {
+            bodyLines[i] = rest;
+            continue;
+          }
+          i++;
+          continue;
+        } else if (/^(вступление|интро|проигрыш|intro|outro|кода)[\s\.:]*(.*)$/i.test(trimmed) && !isChordLine(trimmed)) {
+          const m = trimmed.match(/^(вступление|интро|проигрыш|intro|outro|кода)[\s\.:]*(.*)$/i);
+          const tag = /outro|кода/i.test(m[1]) ? 'E' : 'Intro';
+          hasExplicitSections = true;
+          currentSectionKey = tag;
+          currentSectionKind = 'instrumental';
+          song.lines.push({
+            kind: 'section-header',
+            sectionKey: tag,
+            lyric: '[' + tag + ']',
+            chords: []
+          });
+          if (m[2]) {
+            bodyLines[i] = m[2];
+            continue;
+          }
+          i++;
+          continue;
+        }
+
+        // Если песня не содержит явных обозначений куплетов/припевов,
+        // то делаем такие строки одним куплетом [V1]
+        if (!hasExplicitSections && !hasStartedFirstVerse) {
+          hasStartedFirstVerse = true;
+          currentSectionKey = 'V1';
+          currentSectionKind = 'verse-1';
+          song.lines.push({
+            kind: 'section-header',
+            sectionKey: 'V1',
+            lyric: '[V1]',
+            chords: []
+          });
         }
 
         // Check if line contains chords
@@ -2031,7 +2186,8 @@ ${lyricsBody}
             });
 
             song.lines.push({
-              kind: 'verse',
+              kind: currentSectionKind,
+              sectionKey: currentSectionKey,
               lyric: lyricText,
               chords: chordsList
             });
@@ -2048,7 +2204,8 @@ ${lyricsBody}
             }));
 
             song.lines.push({
-              kind: 'instrumental',
+              kind: currentSectionKind || 'instrumental',
+              sectionKey: currentSectionKey || 'Intro',
               lyric: '',
               chords: chordsList
             });
@@ -2086,7 +2243,8 @@ ${lyricsBody}
         } else {
           // Regular text line without chords
           song.lines.push({
-            kind: 'verse',
+            kind: currentSectionKind,
+            sectionKey: currentSectionKey,
             lyric: currentLine,
             chords: []
           });
@@ -2103,6 +2261,11 @@ ${lyricsBody}
             break;
           }
         }
+      }
+
+      // Automatically determine and set OpenSong <presentation> order from parsed sections
+      if (!song.presentation) {
+        song.presentation = computeDefaultPresentation(song);
       }
 
       return song;
@@ -2142,6 +2305,13 @@ ${lyricsBody}
           <label style="font-size: 0.72rem; color: var(--muted); display: block;">Темп (BPM)</label>
           <input type="text" id="edit-song-tempo" value="${song.tempo || ''}" style="width: 100%; font-size: 0.85rem; padding: 0.2rem 0.4rem; border: 1px solid var(--border); border-radius: 4px;">
         </div>
+        <div style="grid-column: 1 / -1; margin-top: 0.2rem;">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <label style="font-size: 0.72rem; color: var(--muted); font-weight: 700;">Порядок воспроизведения &lt;presentation&gt; (OpenSong):</label>
+            <button type="button" id="btn-auto-presentation" style="font-size: 0.7rem; background: none; border: 1px solid var(--border); border-radius: 4px; padding: 1px 6px; cursor: pointer; color: var(--accent);">↺ Авто из секций</button>
+          </div>
+          <input type="text" id="edit-song-presentation" value="${song.presentation || computeDefaultPresentation(song) || ''}" placeholder="V1 C V2 C B C" style="width: 100%; font-size: 0.85rem; font-family: monospace; font-weight: 700; color: #b45309; padding: 0.25rem 0.4rem; border: 1px solid var(--border); border-radius: 4px;">
+        </div>
       `;
       container.appendChild(metaDiv);
 
@@ -2150,6 +2320,13 @@ ${lyricsBody}
       document.getElementById('edit-song-key').addEventListener('input', (e) => { song.key_default = e.target.value; updateAllLivePreviews(); });
       document.getElementById('edit-song-capo').addEventListener('input', (e) => { song.capo = e.target.value; updateAllLivePreviews(); });
       document.getElementById('edit-song-tempo').addEventListener('input', (e) => { song.tempo = e.target.value; updateAllLivePreviews(); });
+      document.getElementById('edit-song-presentation').addEventListener('input', (e) => { song.presentation = e.target.value; updateAllLivePreviews(); });
+      document.getElementById('btn-auto-presentation')?.addEventListener('click', () => {
+        const autoPres = computeDefaultPresentation(song);
+        song.presentation = autoPres;
+        document.getElementById('edit-song-presentation').value = autoPres;
+        updateAllLivePreviews();
+      });
 
       // Render song lines
       song.lines.forEach((line, lineIndex) => {
@@ -2160,7 +2337,47 @@ ${lyricsBody}
 
         const lineHeader = document.createElement('div');
         lineHeader.className = 'editor-line-header';
-        lineHeader.innerHTML = `<span>Строка ${lineIndex + 1} (${line.kind})</span> <span style="font-size: 0.7rem; color: #94a3b8;">${line.chords ? line.chords.length : 0} аккордов</span>`;
+        const currentLineKey = line.sectionKey || (line.lyric && line.lyric.match(/\[(.*?)\]/) ? line.lyric.match(/\[(.*?)\]/)[1] : (line.kind === 'chorus-header' || line.kind === 'chorus' ? 'C' : (line.kind === 'bridge' ? 'B' : 'V1')));
+        
+        lineHeader.innerHTML = `
+          <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <span>Строка ${lineIndex + 1}</span>
+            <label style="font-size: 0.7rem; color: var(--muted);">Ключ секции:</label>
+            <select class="line-section-key-select" data-line-index="${lineIndex}" style="font-size: 0.72rem; font-weight: 700; padding: 1px 4px; border-radius: 4px; border: 1px solid var(--border); background: var(--card-bg);">
+              <option value="V1" ${currentLineKey === 'V1' ? 'selected' : ''}>[V1] Куплет 1</option>
+              <option value="V2" ${currentLineKey === 'V2' ? 'selected' : ''}>[V2] Куплет 2</option>
+              <option value="V3" ${currentLineKey === 'V3' ? 'selected' : ''}>[V3] Куплет 3</option>
+              <option value="V4" ${currentLineKey === 'V4' ? 'selected' : ''}>[V4] Куплет 4</option>
+              <option value="C"  ${currentLineKey === 'C'  ? 'selected' : ''}>[C]  Припев</option>
+              <option value="C2" ${currentLineKey === 'C2' ? 'selected' : ''}>[C2] Припев 2</option>
+              <option value="B"  ${currentLineKey === 'B'  ? 'selected' : ''}>[B]  Бридж</option>
+              <option value="Intro" ${currentLineKey === 'Intro' ? 'selected' : ''}>[Intro] Вступление</option>
+              <option value="E"  ${currentLineKey === 'E'  ? 'selected' : ''}>[E]  Окончание</option>
+            </select>
+          </div>
+          <span style="font-size: 0.7rem; color: #94a3b8;">${line.chords ? line.chords.length : 0} аккордов</span>
+        `;
+
+        const secSelect = lineHeader.querySelector('.line-section-key-select');
+        if (secSelect) {
+          secSelect.addEventListener('change', (e) => {
+            const selectedVal = e.target.value;
+            line.sectionKey = selectedVal;
+            if (line.kind === 'section-header' || line.kind === 'chorus-header') {
+              line.lyric = `[${selectedVal}]`;
+              line.kind = selectedVal.startsWith('C') ? 'chorus-header' : 'section-header';
+            } else {
+              line.kind = selectedVal.startsWith('C') ? 'chorus' : (selectedVal.startsWith('B') ? 'bridge' : 'verse');
+            }
+            // Auto update presentation input
+            const presInput = document.getElementById('edit-song-presentation');
+            if (presInput) {
+              song.presentation = computeDefaultPresentation(song);
+              presInput.value = song.presentation;
+            }
+            updateAllLivePreviews();
+          });
+        }
         lineBlock.appendChild(lineHeader);
 
         const trackDiv = document.createElement('div');
