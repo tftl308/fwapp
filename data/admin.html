@@ -1988,13 +1988,24 @@ ${lyricsBody}
         // Check if line contains chords
         if (isChordLine(trimmed)) {
           // Tokenize chords and their character offsets
+          // Pre-processing: split hyphen-separated chords (e.g. "Dm-E" -> "Dm E")
+          const processedChordLine = currentLine.replace(/([A-H][b#]?(?:m|maj|min|dim|aug|sus|add)?\d{0,2})[-—]+([A-H][b#]?)/g, '$1 $2');
           const chordTokens = [];
           const regex = /\S+/g;
           let match;
-          while ((match = regex.exec(currentLine)) !== null) {
-            const chordName = match[0].replace(/[\*\*\(\)\[\]]/g, '');
+          while ((match = regex.exec(processedChordLine)) !== null) {
+            let chordName = match[0].replace(/[\*\*\(\)\[\]]/g, '');
+            // If still contains a hyphen between chord notes, split them
+            if (/^[A-H].*[-—][A-H]/.test(chordName)) {
+              const subparts = chordName.split(/[-—]+/);
+              subparts.forEach((sub, subIdx) => {
+                const subX = measureTextWidth(processedChordLine.substring(0, match.index) + ' '.repeat(subIdx * 3));
+                chordTokens.push({ text: sub, x: subX, rawCol: match.index + (subIdx * 3) });
+              });
+              continue;
+            }
             // Calculate proportional X position in Times New Roman
-            const leadingSubstr = currentLine.substring(0, match.index);
+            const leadingSubstr = processedChordLine.substring(0, match.index);
             const xPos = measureTextWidth(leadingSubstr);
             chordTokens.push({ text: chordName, x: xPos, rawCol: match.index });
           }
@@ -3507,18 +3518,38 @@ ${lyricsBody}
     document.getElementById('btn-apply-docx-ids').addEventListener('click', () => {
       if (parsedIdList.length === 0) return;
       let assigned = 0;
+      const usedIds = new Map(); // id -> song
+      const collisions = [];
+
+      // Предварительная проверка: кто уже владеет этими ID в базе
+      dbSongs.forEach(s => {
+        if (s.id) usedIds.set(s.id, s);
+      });
       
       parsedIdList.forEach(item => {
         const song = item.matchedSong || (findBestMatchingSong(item.title, dbSongs)?.song);
         if (song) {
-          song.id = item.id;
+          const targetId = item.id;
+          // Проверяем коллизию двойного назначения
+          if (usedIds.has(targetId) && usedIds.get(targetId) !== song) {
+            const conflictSong = usedIds.get(targetId);
+            collisions.push(`ID #${targetId} («${item.title}») конфликтует с существующей песней #${conflictSong.id} «${conflictSong.title}»`);
+          }
+          // Освобождаем старый ID песни
+          if (song.id) usedIds.delete(song.id);
+          song.id = targetId;
           song.number = item.number;
+          usedIds.set(targetId, song);
           assigned++;
         }
       });
 
       saveDb();
-      alert(`Успешно присвоены канонические 4-значные ID выхода для ${assigned} песен!\n(С учетом нечетких совпадений и ссылок на Псалмы)`);
+      if (collisions.length > 0) {
+        alert(`Присвоено ID для ${assigned} песен, но обнаружено ${collisions.length} коллизий двойных ID:\n` + collisions.slice(0, 10).join('\n') + (collisions.length > 10 ? `\n...и ещё ${collisions.length - 10}` : ''));
+      } else {
+        alert(`Успешно присвоены уникальные 4-значные ID выхода для ${assigned} песен!\nКоллизий и дубликатов ID не обнаружено.`);
+      }
     });
 
     // ==========================================
@@ -3868,16 +3899,30 @@ ${lyricsBody}
       const ts = new Date().toISOString().replace('T', ' ').slice(0, 19);
       messages.push('[' + ts + '] Запуск автоматического аудита базы данных...');
 
-      const idMap = new Map();
+      const idMap = new Map(); // id -> [songs]
       let non4Digit = 0;
       let duplicates = 0;
       dbSongs.forEach(s => {
         if (!/^[0-9]{4}$/.test(s.id)) non4Digit++;
-        if (idMap.has(s.id)) duplicates++;
-        idMap.set(s.id, (idMap.get(s.id) || 0) + 1);
+        if (!idMap.has(s.id)) idMap.set(s.id, []);
+        idMap.get(s.id).push(s);
       });
+      
+      const dupEntries = [];
+      idMap.forEach((songsList, id) => {
+        if (songsList.length > 1) {
+          duplicates += (songsList.length - 1);
+          dupEntries.push(`  ⚠️ Двойной ID #${id}: ${songsList.map(s => '«' + s.title + '»').join(' И ')}`);
+        }
+      });
+
       messages.push('  • Всего записей песен: ' + dbSongs.length);
       messages.push('  • Уникальных 4-значных ID: ' + idMap.size + ' (Дубликатов: ' + duplicates + ', Нестандартных: ' + non4Digit + ')');
+      if (dupEntries.length > 0) {
+        messages.push('\n[ОБНАРУЖЕНЫ КОЛЛИЗИИ ДВОЙНЫХ ID]:');
+        dupEntries.forEach(d => messages.push(d));
+        messages.push('\n💡 Чтобы исправить двойной ID: откройте вкладку «3. Реестр песен», найдите песню и нажмите «✏️ Поля», чтобы назначить уникальный 4-значный номер.');
+      }
 
       let missingKey = 0;
       let missingChords = 0;
