@@ -7158,7 +7158,7 @@ class AppController {
                    return item && item.song_id === s.id;
                  }) : null);
 
-    // Вычисляем максимальную длину строки в песне (+5 единиц по запросу)
+    // Вычисляем максимальную длину строки в песне (+2 единиц запаса)
     let maxLineLen = 25;
     if (song && song.body_plain) {
       const lines = song.body_plain.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
@@ -7166,9 +7166,9 @@ class AppController {
         if (line.length > maxLineLen) maxLineLen = line.length;
       }
     }
-    const effectiveMaxLen = maxLineLen + 5; // Добавляем +5 единиц для идеальной подгонки
+    const effectiveMaxLen = maxLineLen + 2; // Добавляется +2 единиц запаса
 
-    // Рассчитываем горизонтальный базовый размер (ch-based) с учетом +5 единиц запаса
+    // Рассчитываем горизонтальный базовый размер (ch-based) с учетом +2 единиц запаса
     const charWidthPx = (availWidth - 24) / Math.max(20, effectiveMaxLen);
     let initialFontSize = Math.min(1.35, Math.max(0.65, charWidthPx / 10.5));
 
