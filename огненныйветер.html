@@ -5080,6 +5080,20 @@ function getChordFingerings(rawChord) {
   // Strip parentheses or brackets
   chord = chord.replace(/[\(\)\[\]]/g, '').trim();
 
+  // If chord is a composite progression (e.g. "Am-Dm", "Am/G", "AmF"), extract first chord
+  if (chord.includes('-') || chord.includes('—')) {
+    const parts = chord.split(/[-—]/).map(p => p.trim()).filter(Boolean);
+    if (parts.length > 0 && GUITAR_CHORD_FINGERINGS[parts[0]]) {
+      return GUITAR_CHORD_FINGERINGS[parts[0]];
+    }
+  }
+
+  // Handle adjacent chords like AmA7, AmDm, DmAm, EmAm, FDm, FE, GAm, H7Em
+  const adjMatch = chord.match(/^([A-H][b#]?(?:m|maj|dim|aug|sus|add)?[0-9]?)([A-H].*)$/);
+  if (adjMatch && GUITAR_CHORD_FINGERINGS[adjMatch[1]]) {
+    return GUITAR_CHORD_FINGERINGS[adjMatch[1]];
+  }
+
   // Try direct match
   if (GUITAR_CHORD_FINGERINGS[chord]) return GUITAR_CHORD_FINGERINGS[chord];
 
@@ -5626,93 +5640,100 @@ class Id3ArtworkHelper {
   static async extractCoverFromBlob(blob) {
     if (!blob) return null;
     try {
-      // Read first 512KB where ID3 header and APIC typically live
-      const slice = blob.slice(0, Math.min(blob.size, 512 * 1024));
+      // Читаем первые 3 МБ аудиофайла (обложки высокого разрешения могут занимать до 2-3 МБ)
+      const sliceSize = Math.min(blob.size, 3 * 1024 * 1024);
+      const slice = blob.slice(0, sliceSize);
       const buffer = await slice.arrayBuffer();
       const bytes = new Uint8Array(buffer);
 
       if (bytes.length < 10) return null;
-      // Check for ID3 header
-      if (bytes[0] !== 0x49 || bytes[1] !== 0x44 || bytes[2] !== 0x33) return null; // 'ID3'
 
-      const versionMajor = bytes[3];
-      const tagSize = ((bytes[6] & 0x7f) << 21) | ((bytes[7] & 0x7f) << 14) | ((bytes[8] & 0x7f) << 7) | (bytes[9] & 0x7f);
+      // Способ 1: Парсинг структуры ID3v2 тега
+      if (bytes[0] === 0x49 && bytes[1] === 0x44 && bytes[2] === 0x33) { // 'ID3'
+        const versionMajor = bytes[3];
+        const tagSize = ((bytes[6] & 0x7f) << 21) | ((bytes[7] & 0x7f) << 14) | ((bytes[8] & 0x7f) << 7) | (bytes[9] & 0x7f);
+        let pos = 10;
+        const limit = Math.min(bytes.length, 10 + tagSize);
 
-      let pos = 10;
-      const limit = Math.min(bytes.length, 10 + tagSize);
+        while (pos + 10 < limit) {
+          let frameId = '';
+          for (let i = 0; i < 4; i++) frameId += String.fromCharCode(bytes[pos + i]);
 
-      while (pos + 10 < limit) {
-        let frameId = '';
-        for (let i = 0; i < 4; i++) {
-          frameId += String.fromCharCode(bytes[pos + i]);
-        }
+          // Проверка на заполнение нулями в конце заголовка ID3
+          if (bytes[pos] === 0 && bytes[pos + 1] === 0) break;
 
-        let frameSize = 0;
-        if (versionMajor === 3) {
-          // ID3v2.3: 4-byte big endian
-          frameSize = (bytes[pos + 4] << 24) | (bytes[pos + 5] << 16) | (bytes[pos + 6] << 8) | bytes[pos + 7];
-        } else if (versionMajor === 4) {
-          // ID3v2.4: 4-byte synchsafe int
-          frameSize = ((bytes[pos + 4] & 0x7f) << 21) | ((bytes[pos + 5] & 0x7f) << 14) | ((bytes[pos + 6] & 0x7f) << 7) | (bytes[pos + 7] & 0x7f);
-        } else {
-          break;
-        }
-
-        pos += 10;
-        if (frameSize <= 0 || pos + frameSize > bytes.length) break;
-
-        if (frameId === 'APIC') {
-          const encoding = bytes[pos];
-          // Find null terminator for MIME string
-          let mimeEnd = pos + 1;
-          while (mimeEnd < pos + frameSize && bytes[mimeEnd] !== 0x00) {
-            mimeEnd++;
-          }
-          let mime = 'image/jpeg';
-          if (mimeEnd > pos + 1) {
-            let mStr = '';
-            for (let m = pos + 1; m < mimeEnd; m++) mStr += String.fromCharCode(bytes[m]);
-            if (mStr) mime = mStr;
-          }
-
-          let descStart = mimeEnd + 2; // skip mime null + pic type byte
-          let picStart = descStart;
-          if (encoding === 1 || encoding === 2) {
-            // UTF-16: find double null
-            let d = descStart;
-            while (d + 1 < pos + frameSize && !(bytes[d] === 0x00 && bytes[d + 1] === 0x00)) {
-              d += 2;
-            }
-            picStart = d + 2;
-            if (picStart % 2 !== 0) picStart++;
+          let frameSize = 0;
+          if (versionMajor === 3) {
+            frameSize = (bytes[pos + 4] << 24) | (bytes[pos + 5] << 16) | (bytes[pos + 6] << 8) | bytes[pos + 7];
+          } else if (versionMajor === 4) {
+            frameSize = ((bytes[pos + 4] & 0x7f) << 21) | ((bytes[pos + 5] & 0x7f) << 14) | ((bytes[pos + 6] & 0x7f) << 7) | (bytes[pos + 7] & 0x7f);
+          } else if (versionMajor === 2) {
+            // ID3v2.2 PIC frame
+            frameSize = (bytes[pos + 3] << 16) | (bytes[pos + 4] << 8) | bytes[pos + 5];
           } else {
-            // ISO-8859-1 or UTF-8: find single null
-            let d = descStart;
-            while (d < pos + frameSize && bytes[d] !== 0x00) {
-              d++;
-            }
-            picStart = d + 1;
+            break;
           }
 
-          if (picStart < pos + frameSize) {
-            const imgData = bytes.subarray(picStart, pos + frameSize);
-            const imgBlob = new Blob([imgData], { type: mime });
-            return URL.createObjectURL(imgBlob);
+          const dataPos = pos + (versionMajor === 2 ? 6 : 10);
+          if (frameSize <= 0 || dataPos + frameSize > bytes.length) break;
+
+          if (frameId === 'APIC' || frameId === 'PIC') {
+            // Ищем сигнатуру JPEG (FF D8 FF) или PNG (89 50 4E 47) внутри фрейма
+            for (let s = dataPos; s < dataPos + frameSize - 4; s++) {
+              if (bytes[s] === 0xFF && bytes[s + 1] === 0xD8 && bytes[s + 2] === 0xFF) {
+                const imgData = bytes.subarray(s, dataPos + frameSize);
+                return URL.createObjectURL(new Blob([imgData], { type: 'image/jpeg' }));
+              }
+              if (bytes[s] === 0x89 && bytes[s + 1] === 0x50 && bytes[s + 2] === 0x4E && bytes[s + 3] === 0x47) {
+                const imgData = bytes.subarray(s, dataPos + frameSize);
+                return URL.createObjectURL(new Blob([imgData], { type: 'image/png' }));
+              }
+            }
+          }
+
+          pos = dataPos + frameSize;
+        }
+      }
+
+      // Способ 2: Прямое сканирование бинарного потока на встроенное изображение JPEG или PNG в первых 3 МБ
+      for (let s = 10; s < bytes.length - 2048; s++) {
+        // Поиск JPEG сигнатуры
+        if (bytes[s] === 0xFF && bytes[s + 1] === 0xD8 && bytes[s + 2] === 0xFF && (bytes[s + 3] === 0xE0 || bytes[s + 3] === 0xE1 || bytes[s + 3] === 0xDB || bytes[s + 3] === 0xEE)) {
+          // Ищем конец JPEG (FF D9)
+          let end = -1;
+          for (let e = s + 100; e < bytes.length - 1; e++) {
+            if (bytes[e] === 0xFF && bytes[e + 1] === 0xD9) {
+              end = e + 2;
+              break;
+            }
+          }
+          if (end !== -1 && (end - s) > 500) {
+            const imgData = bytes.subarray(s, end);
+            return URL.createObjectURL(new Blob([imgData], { type: 'image/jpeg' }));
           }
         }
-
-        pos += frameSize;
+        // Поиск PNG сигнатуры
+        if (bytes[s] === 0x89 && bytes[s + 1] === 0x50 && bytes[s + 2] === 0x4E && bytes[s + 3] === 0x47) {
+          let end = -1;
+          for (let e = s + 8; e < bytes.length - 8; e++) {
+            if (bytes[e] === 0x49 && bytes[e + 1] === 0x45 && bytes[e + 2] === 0x4E && bytes[e + 3] === 0x44) { // IEND
+              end = e + 8;
+              break;
+            }
+          }
+          if (end !== -1 && (end - s) > 500) {
+            const imgData = bytes.subarray(s, end);
+            return URL.createObjectURL(new Blob([imgData], { type: 'image/png' }));
+          }
+        }
       }
     } catch (e) {
-      console.warn('ID3 APIC extraction failed:', e);
+      console.warn('ID3 APIC extraction error:', e);
     }
     return null;
   }
 }
 
-// ==========================================
-// 6. AUDIO PLAYER SERVICE
-// ==========================================
 class AudioPlayerService {
   constructor() {
     this.audioElement = new Audio();
@@ -7130,18 +7151,40 @@ class AppController {
     const availHeight = bodyEl.clientHeight;
     if (availWidth <= 0 || availHeight <= 0) return;
 
-    // Оптимальный компактный расчет для максимального охвата песни на экране телефона
-    let fontSize = 0.95; // Оптимальный компактный шрифт
-    let lineMargin = 0.05; // Минимальная плотность межстрочного интервала
+    const state = store.getState();
+    const song = state.songs.find(s => s.id === (state.concertSingleSongId || state.currentSongId)) ||
+                 (state.concertPlaylistId ? state.songs.find(s => {
+                   const item = (state.playlistItems || []).filter(it => it.playlist_id === state.concertPlaylistId)[state.concertIndex];
+                   return item && item.song_id === s.id;
+                 }) : null);
+
+    // Вычисляем максимальную длину строки в песне (+5 единиц по запросу)
+    let maxLineLen = 25;
+    if (song && song.body_plain) {
+      const lines = song.body_plain.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+      for (const line of lines) {
+        if (line.length > maxLineLen) maxLineLen = line.length;
+      }
+    }
+    const effectiveMaxLen = maxLineLen + 5; // Добавляем +5 единиц для идеальной подгонки
+
+    // Рассчитываем горизонтальный базовый размер (ch-based) с учетом +5 единиц запаса
+    const charWidthPx = (availWidth - 24) / Math.max(20, effectiveMaxLen);
+    let initialFontSize = Math.min(1.35, Math.max(0.65, charWidthPx / 10.5));
+
+    let fontSize = parseFloat(initialFontSize.toFixed(2));
+    let lineMargin = 0.08;
 
     document.documentElement.style.setProperty('--font-concert', fontSize + 'rem');
     document.documentElement.style.setProperty('--concert-line-margin', lineMargin + 'rem');
 
-    // Проверяем заполнение по вертикали: если песня всё ещё не помещается, уменьшаем шрифт вплоть до 0.55rem
+    // Проверяем заполнение по вертикали: если песня не помещается, плавно уменьшаем
     let attempts = 0;
-    while (bodyEl.scrollHeight > (availHeight + 10) && fontSize > 0.55 && attempts < 12) {
-      fontSize -= 0.04;
+    while (bodyEl.scrollHeight > (availHeight + 6) && fontSize > 0.55 && attempts < 14) {
+      fontSize -= 0.03;
+      if (fontSize < 0.85) lineMargin = 0.04;
       document.documentElement.style.setProperty('--font-concert', fontSize.toFixed(2) + 'rem');
+      document.documentElement.style.setProperty('--concert-line-margin', lineMargin + 'rem');
       attempts++;
     }
 
@@ -9149,17 +9192,32 @@ async handleBatchAudioUpload(files) {
   }
 
   downloadFile(content, filename, type) {
-    const blob = new Blob([content], { type });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    setTimeout(() => {
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    }, 100);
+    try {
+      const blob = new Blob([content], { type: type || 'text/plain;charset=utf-8' });
+      // Native Save As if supported
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      a.rel = 'noopener';
+      a.target = '_blank';
+      document.body.appendChild(a);
+      a.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, view: window }));
+      setTimeout(() => {
+        try { document.body.removeChild(a); } catch(e) {}
+        try { URL.revokeObjectURL(url); } catch(e) {}
+      }, 5000);
+      AppController.showToast('✓ Файл ' + filename + ' сформирован для скачивания');
+    } catch(err) {
+      AppLogger.error('DOWNLOAD', 'Ошибка скачивания файла: ' + err.message);
+      // Fallback: window.open or data URI
+      try {
+        const uri = 'data:' + (type || 'text/plain;charset=utf-8') + ',' + encodeURIComponent(content);
+        window.open(uri, '_blank');
+      } catch(e) {
+        alert('Лог:\n' + content.slice(0, 1000));
+      }
+    }
   }
 
   onStateChange(state) {
@@ -9607,15 +9665,18 @@ async handleBatchAudioUpload(files) {
 
     const printBtn = Renderer.createElement('button', {
       className: 'btn btn-outline btn-sm no-print',
+      style: 'min-width: 36px; padding: 0.35rem 0.55rem; font-size: 1.15rem;',
       dataset: { action: 'print-song' },
       title: 'Печать текста песни и аккордов (Ctrl+P)'
-    }, ['🖨 Печать']);
+    }, ['🖨']);
     headerActions.appendChild(printBtn);
 
     const stageBtn = Renderer.createElement('button', {
       className: 'btn btn-brick btn-sm no-print',
-      dataset: { action: 'open-concert-single-song', songId: song.id }
-    }, ['На сцену']);
+      style: 'min-width: 36px; padding: 0.35rem 0.55rem; font-size: 1.15rem;',
+      dataset: { action: 'open-concert-single-song', songId: song.id },
+      title: 'На сцену (концертный режим)'
+    }, ['🎤']);
     headerActions.appendChild(stageBtn);
 
     // 1. Верхняя строка
