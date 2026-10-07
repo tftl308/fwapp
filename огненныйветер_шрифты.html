@@ -1687,7 +1687,7 @@
   <!-- Player removed in Light Reader -->
 
   <nav class="bottom-nav">
-    <button class="nav-item active" data-action="nav-tab" data-tab="catalog">
+    <button class="nav-item" data-action="nav-tab" data-tab="catalog">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
       <span>Песни</span>
     </button>
@@ -1696,6 +1696,10 @@
       <span>Списки</span>
     </button>
     
+    <button class="nav-item active" data-action="nav-tab" data-tab="fonts">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></svg>
+      <span>Шрифты</span>
+    </button>
     <button class="nav-item" data-action="nav-tab" data-tab="settings">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
       <span>Опции</span>
@@ -1890,7 +1894,7 @@ class Store {
       playlists: [],
       playlistItems: [],
       currentProfile: 'none', // ПО УМОЛЧАНИЮ: 'none' (Обычный пользователь / слушатель)
-      currentTab: 'catalog',
+      currentTab: 'fonts',
       catalogMobileSubTab: 'songs', // 'songs' | 'setlist' (для мобильных экранов)
       currentSongId: null,
       currentPlaylistId: 'pl-temp',
@@ -6534,6 +6538,24 @@ class AppController {
     this.setupConcertTouchGestures();
     this.setupHistoryBackNavigation();
 
+    // Восстановление выбранных шрифтов при старте
+    const savedLyricsFont = localStorage.getItem('ov_test_lyrics_font');
+    if (savedLyricsFont) {
+      document.documentElement.style.setProperty('--font-family-lyrics', savedLyricsFont);
+    }
+    const savedChordsFont = localStorage.getItem('ov_test_chords_font');
+    if (savedChordsFont) {
+      document.documentElement.style.setProperty('--font-family-chords', savedChordsFont);
+    }
+    const savedLyricsScale = localStorage.getItem('ov_test_lyrics_scale');
+    if (savedLyricsScale && savedLyricsScale !== '1.0') {
+      document.documentElement.style.setProperty('--font-lyrics', `calc(clamp(0.95rem, 3.2vw, 1.15rem) * ${savedLyricsScale})`);
+    }
+    const savedChordsScale = localStorage.getItem('ov_test_chords_scale');
+    if (savedChordsScale && savedChordsScale !== '1.0') {
+      document.documentElement.style.setProperty('--font-chords', `calc(clamp(0.95rem, 3.2vw, 1.15rem) * ${savedChordsScale})`);
+    }
+
     const savedTheme = await storage.getSetting('theme') || 'paper-brick';
     const savedNotation = await storage.getSetting('notation') || 'H';
     const savedProfile = await storage.getSetting('currentProfile') || 'none';
@@ -9381,6 +9403,9 @@ async handleBatchAudioUpload(files) {
     } else if (state.currentTab === 'player') {
       pageTitle.textContent = 'Студийный Плеер';
       this.renderDedicatedPlayerView(main);
+    } else if (state.currentTab === 'fonts') {
+      pageTitle.textContent = 'Подбор и Лаборатория Шрифтов';
+      this.renderFontsLabView(main);
     } else if (state.currentTab === 'settings') {
       pageTitle.textContent = 'Опции и Заметки';
       this.renderSettingsView(main);
@@ -10451,6 +10476,280 @@ async handleBatchAudioUpload(files) {
   // ============================================================
   // НАСТРОЙКИ: ВЫПАДАЮЩИЙ СПИСОК РОЛЕЙ (РЕШАЕТ ПРОБЛЕМУ 3 СКРИНА)
   // ============================================================
+  renderFontsLabView(container) {
+    container.innerHTML = '';
+    const state = store.getState();
+    const wrap = Renderer.createElement('div', { className: 'flex', style: 'flex-direction: column; gap: 1rem;' });
+
+    // Header info banner
+    const banner = Renderer.createElement('div', {
+      className: 'song-card',
+      style: 'background: var(--flame-grad); color: #fff; padding: 1rem 1.25rem; border-radius: 0.75rem; display: flex; flex-direction: column; gap: 0.35rem; box-shadow: 0 4px 15px rgba(192, 48, 0, 0.25);'
+    }, [
+      Renderer.createElement('div', { style: 'display: flex; justify-content: space-between; align-items: center;' }, [
+        Renderer.createElement('h2', { style: 'margin: 0; font-size: 1.25rem; font-weight: 900; color: #fff;' }, ['🔤 Интерактивная Лаборатория Шрифтов']),
+        Renderer.createElement('span', { style: 'background: rgba(255,255,255,0.25); color: #fff; font-size: 0.72rem; font-weight: 800; padding: 2px 8px; border-radius: 999px;' }, ['LIVE TESTING'])
+      ]),
+      Renderer.createElement('p', { style: 'margin: 0; font-size: 0.85rem; opacity: 0.95; line-height: 1.4;' }, [
+        'Здесь вы можете в реальном времени примерить любые кириллические гарнитуры, отрегулировать масштаб текста и аккордов, а также сразу увидеть результат как на живом образце, так и открыть любую песню из каталога с выбранными шрифтами.'
+      ])
+    ]);
+    wrap.appendChild(banner);
+
+    // =========================================================================
+    // ОСНОВНОЙ БЛОК НАСТРОЙКИ ШРИФТОВ
+    // =========================================================================
+    const labCard = Renderer.createElement('div', {
+      className: 'song-card',
+      style: 'flex-direction: column; align-items: stretch; gap: 1.2rem; border: 2px solid var(--accent); background: var(--bg-card); box-shadow: 0 4px 12px rgba(0,0,0,0.06); padding: 1.2rem;'
+    });
+
+    const fontOptions = [
+      { label: '★ Golos UI / Golos Text (Текущий канонический)', val: "'Golos UI', 'Golos Text', -apple-system, BlinkMacSystemFont, sans-serif" },
+      { label: '★ Fira Sans Extra Condensed (Экстра-плотный вытянутый)', val: "'Fira Sans Extra Condensed', sans-serif" },
+      { label: '★ Sofia Sans Extra Condensed (Ультра-компактный вытянутый)', val: "'Sofia Sans Extra Condensed', sans-serif" },
+      { label: '★ Roboto Condensed (Классический компактный)', val: "'Roboto Condensed', sans-serif" },
+      { label: '★ PT Sans Narrow (Узкий строгий)', val: "'PT Sans Narrow', sans-serif" },
+      { label: '★ Oswald (Узкий монументальный)', val: "'Oswald', sans-serif" },
+      { label: '★ Open Sans Condensed (Узкий сбалансированный)', val: "'Open Sans Condensed', sans-serif" },
+      { label: '★ Inter (Технический современный гротеск)', val: "'Inter', sans-serif" },
+      { label: '✦ Calibri (Стандартный гуманистический)', val: "Calibri, Carlito, sans-serif" },
+      { label: '✦ Arial / Helvetica (Классический нейтральный)', val: "Arial, Helvetica, sans-serif" },
+      { label: '✦ Times New Roman (Классический шрифт с засечками)', val: "'Times New Roman', Times, serif" },
+      { label: '✦ PT Serif (Отечественная кириллица с засечками)', val: "'PT Serif', serif" },
+      { label: '✦ Lora (Элегантная каллиграфическая кириллица с засечками)', val: "'Lora', serif" },
+      { label: '✦ Merriweather (Плотный читаемый с засечками)', val: "'Merriweather', serif" },
+      { label: '✦ Geologica (Геометрический гротеск)', val: "'Geologica', sans-serif" }
+    ];
+
+    // 1. Выбор шрифта ТЕКСТА
+    const lyricsFontWrap = Renderer.createElement('div', { style: 'display: flex; flex-direction: column; gap: 0.4rem;' });
+    lyricsFontWrap.appendChild(Renderer.createElement('label', { style: 'font-size: 0.88rem; font-weight: 800; color: var(--text-main);' }, [
+      '1. Гарнитура для ТЕКСТА ПЕСНИ (Слова / Куплеты):'
+    ]));
+
+    const lyricsSelect = Renderer.createElement('select', {
+      id: 'lab-lyrics-font-select',
+      className: 'input-select',
+      style: 'width: 100%; font-size: 0.95rem; font-weight: 600;'
+    });
+
+    const curLyricsF = localStorage.getItem('ov_test_lyrics_font') || "'Golos UI', 'Golos Text', -apple-system, BlinkMacSystemFont, sans-serif";
+    fontOptions.forEach(opt => {
+      const el = document.createElement('option');
+      el.value = opt.val;
+      el.textContent = opt.label;
+      if (opt.val === curLyricsF) el.selected = true;
+      lyricsSelect.appendChild(el);
+    });
+    lyricsSelect.addEventListener('change', (e) => {
+      const v = e.target.value;
+      localStorage.setItem('ov_test_lyrics_font', v);
+      document.documentElement.style.setProperty('--font-family-lyrics', v);
+      updateLabPreview();
+    });
+    lyricsFontWrap.appendChild(lyricsSelect);
+    labCard.appendChild(lyricsFontWrap);
+
+    // 2. Выбор шрифта АККОРДОВ
+    const chordsFontWrap = Renderer.createElement('div', { style: 'display: flex; flex-direction: column; gap: 0.4rem;' });
+    chordsFontWrap.appendChild(Renderer.createElement('label', { style: 'font-size: 0.88rem; font-weight: 800; color: var(--text-main);' }, [
+      '2. Гарнитура для АККОРДОВ:'
+    ]));
+
+    const chordsSelect = Renderer.createElement('select', {
+      id: 'lab-chords-font-select',
+      className: 'input-select',
+      style: 'width: 100%; font-size: 0.95rem; font-weight: 600;'
+    });
+
+    const curChordsF = localStorage.getItem('ov_test_chords_font') || "'Golos Text', -apple-system, BlinkMacSystemFont, sans-serif";
+    fontOptions.forEach(opt => {
+      const el = document.createElement('option');
+      el.value = opt.val;
+      el.textContent = opt.label;
+      if (opt.val === curChordsF) el.selected = true;
+      chordsSelect.appendChild(el);
+    });
+    chordsSelect.addEventListener('change', (e) => {
+      const v = e.target.value;
+      localStorage.setItem('ov_test_chords_font', v);
+      document.documentElement.style.setProperty('--font-family-chords', v);
+      updateLabPreview();
+    });
+    chordsFontWrap.appendChild(chordsSelect);
+    labCard.appendChild(chordsFontWrap);
+
+    // 3. Регулировка размеров шрифтов (Слайдеры)
+    const scaleGrid = Renderer.createElement('div', { style: 'display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;' });
+
+    // Слайдер размера текста
+    const lyricsScaleWrap = Renderer.createElement('div', { style: 'display: flex; flex-direction: column; gap: 0.35rem;' });
+    const curLyricsSc = localStorage.getItem('ov_test_lyrics_scale') || '1.0';
+    const lyricsValLabel = Renderer.createElement('span', { style: 'font-weight: 800; color: var(--accent);' }, [curLyricsSc + 'x']);
+    lyricsScaleWrap.appendChild(Renderer.createElement('div', { style: 'display: flex; justify-content: space-between; font-size: 0.82rem; font-weight: 700;' }, [
+      Renderer.createElement('span', {}, ['Масштаб текста:']),
+      lyricsValLabel
+    ]));
+    const lyricsSlider = Renderer.createElement('input', {
+      type: 'range',
+      min: '0.6',
+      max: '1.6',
+      step: '0.05',
+      value: curLyricsSc,
+      style: 'cursor: pointer; width: 100%;'
+    });
+    lyricsSlider.addEventListener('input', (e) => {
+      const sc = e.target.value;
+      lyricsValLabel.textContent = sc + 'x';
+      localStorage.setItem('ov_test_lyrics_scale', sc);
+      document.documentElement.style.setProperty('--font-lyrics', `calc(clamp(0.95rem, 3.2vw, 1.15rem) * ${sc})`);
+      updateLabPreview();
+    });
+    lyricsScaleWrap.appendChild(lyricsSlider);
+    scaleGrid.appendChild(lyricsScaleWrap);
+
+    // Слайдер размера аккордов
+    const chordsScaleWrap = Renderer.createElement('div', { style: 'display: flex; flex-direction: column; gap: 0.35rem;' });
+    const curChordsSc = localStorage.getItem('ov_test_chords_scale') || '1.0';
+    const chordsValLabel = Renderer.createElement('span', { style: 'font-weight: 800; color: var(--accent);' }, [curChordsSc + 'x']);
+    chordsScaleWrap.appendChild(Renderer.createElement('div', { style: 'display: flex; justify-content: space-between; font-size: 0.82rem; font-weight: 700;' }, [
+      Renderer.createElement('span', {}, ['Масштаб аккордов:']),
+      chordsValLabel
+    ]));
+    const chordsSlider = Renderer.createElement('input', {
+      type: 'range',
+      min: '0.6',
+      max: '1.6',
+      step: '0.05',
+      value: curChordsSc,
+      style: 'cursor: pointer; width: 100%;'
+    });
+    chordsSlider.addEventListener('input', (e) => {
+      const sc = e.target.value;
+      chordsValLabel.textContent = sc + 'x';
+      localStorage.setItem('ov_test_chords_scale', sc);
+      document.documentElement.style.setProperty('--font-chords', `calc(clamp(0.95rem, 3.2vw, 1.15rem) * ${sc})`);
+      updateLabPreview();
+    });
+    chordsScaleWrap.appendChild(chordsSlider);
+    scaleGrid.appendChild(chordsScaleWrap);
+
+    labCard.appendChild(scaleGrid);
+
+    // 4. Кнопки сброса к каноническим значениям
+    const resetRow = Renderer.createElement('div', { style: 'display: flex; gap: 0.5rem; justify-content: flex-end;' }, [
+      Renderer.createElement('button', {
+        className: 'btn btn-outline btn-sm',
+        style: 'font-size: 0.8rem;',
+        onclick: () => {
+          localStorage.setItem('ov_test_lyrics_font', "'Golos UI', 'Golos Text', -apple-system, BlinkMacSystemFont, sans-serif");
+          localStorage.setItem('ov_test_chords_font', "'Golos Text', -apple-system, BlinkMacSystemFont, sans-serif");
+          localStorage.setItem('ov_test_lyrics_scale', '1.0');
+          localStorage.setItem('ov_test_chords_scale', '1.0');
+          document.documentElement.style.setProperty('--font-family-lyrics', "'Golos UI', 'Golos Text', -apple-system, BlinkMacSystemFont, sans-serif");
+          document.documentElement.style.setProperty('--font-family-chords', "'Golos Text', -apple-system, BlinkMacSystemFont, sans-serif");
+          document.documentElement.style.setProperty('--font-lyrics', 'clamp(0.95rem, 3.2vw, 1.15rem)');
+          document.documentElement.style.setProperty('--font-chords', 'clamp(0.95rem, 3.2vw, 1.15rem)');
+          lyricsSelect.value = "'Golos UI', 'Golos Text', -apple-system, BlinkMacSystemFont, sans-serif";
+          chordsSelect.value = "'Golos Text', -apple-system, BlinkMacSystemFont, sans-serif";
+          lyricsSlider.value = '1.0';
+          chordsSlider.value = '1.0';
+          lyricsValLabel.textContent = '1.0x';
+          chordsValLabel.textContent = '1.0x';
+          updateLabPreview();
+          AppController.showToast('Шрифты сброшены к фирменным Golos UI / Golos Text');
+        }
+      }, ['Сбросить по умолчанию'])
+    ]);
+    labCard.appendChild(resetRow);
+
+    // 5. Живой образец для мгновенной проверки гарнитуры
+    const previewBox = Renderer.createElement('div', {
+      id: 'lab-live-preview',
+      style: 'padding: 1rem; border-radius: 8px; border: 2px dashed var(--border-color); background: var(--bg-secondary); display: flex; flex-direction: column; gap: 0.6rem;'
+    });
+
+    function updateLabPreview() {
+      const p = document.getElementById('lab-live-preview');
+      if (!p) return;
+      const curL = localStorage.getItem('ov_test_lyrics_font') || "'Golos UI', 'Golos Text', -apple-system, BlinkMacSystemFont, sans-serif";
+      const curC = localStorage.getItem('ov_test_chords_font') || "'Golos Text', -apple-system, BlinkMacSystemFont, sans-serif";
+      const scL = parseFloat(localStorage.getItem('ov_test_lyrics_scale') || '1.0');
+      const scC = parseFloat(localStorage.getItem('ov_test_chords_scale') || '1.0');
+
+      p.innerHTML = `
+        <div style="font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); font-weight: 800;">
+          Живой интерактивный образец отображения:
+        </div>
+        <div class="lyrics-render-line" style="margin: 0; display: flex; flex-wrap: wrap; gap: 0.35rem; align-items: flex-end;">
+          <div class="syllable-chord-block" style="display: inline-flex; flex-direction: column;">
+            <div class="syllable-chord" style="color: var(--chord-color); font-weight: 600; font-size: ${1.15 * scC}rem; font-family: ${curC};">[E]</div>
+            <div class="syllable-text" style="font-size: ${1.1 * scL}rem; font-family: ${curL}; line-height: 1.15;">Адонай! </div>
+          </div>
+          <div class="syllable-chord-block" style="display: inline-flex; flex-direction: column;">
+            <div class="syllable-chord" style="color: var(--chord-color); font-weight: 600; font-size: ${1.15 * scC}rem; font-family: ${curC};">[Dm]</div>
+            <div class="syllable-text" style="font-size: ${1.1 * scL}rem; font-family: ${curL}; line-height: 1.15;">Адон</div>
+          </div>
+          <div class="syllable-chord-block" style="display: inline-flex; flex-direction: column;">
+            <div class="syllable-chord" style="color: var(--chord-color); font-weight: 600; font-size: ${1.15 * scC}rem; font-family: ${curC};">[E]</div>
+            <div class="syllable-text" style="font-size: ${1.1 * scL}rem; font-family: ${curL}; line-height: 1.15;">ай! </div>
+          </div>
+          <div class="syllable-chord-block" style="display: inline-flex; flex-direction: column;">
+            <div class="syllable-chord" style="color: var(--chord-color); font-weight: 600; font-size: ${1.15 * scC}rem; font-family: ${curC};">[Dm]</div>
+            <div class="syllable-text" style="font-size: ${1.1 * scL}rem; font-family: ${curL}; line-height: 1.15;">Элохим!</div>
+          </div>
+        </div>
+        <div class="lyrics-render-line" style="margin-top: 0.25rem; display: flex; flex-wrap: wrap; gap: 0.35rem; align-items: flex-end;">
+          <div class="syllable-chord-block" style="display: inline-flex; flex-direction: column;">
+            <div class="syllable-chord" style="color: var(--chord-color); font-weight: 600; font-size: ${1.15 * scC}rem; font-family: ${curC};">[Am]</div>
+            <div class="syllable-text" style="font-size: ${1.1 * scL}rem; font-family: ${curL}; line-height: 1.15;">В Царство </div>
+          </div>
+          <div class="syllable-chord-block" style="display: inline-flex; flex-direction: column;">
+            <div class="syllable-chord" style="color: var(--chord-color); font-weight: 600; font-size: ${1.15 * scC}rem; font-family: ${curC};">[G]</div>
+            <div class="syllable-text" style="font-size: ${1.1 * scL}rem; font-family: ${curL}; line-height: 1.15;">света </div>
+          </div>
+          <div class="syllable-chord-block" style="display: inline-flex; flex-direction: column;">
+            <div class="syllable-chord" style="color: var(--chord-color); font-weight: 600; font-size: ${1.15 * scC}rem; font-family: ${curC};">[C]</div>
+            <div class="syllable-text" style="font-size: ${1.1 * scL}rem; font-family: ${curL}; line-height: 1.15;">мы идём, </div>
+          </div>
+          <div class="syllable-chord-block" style="display: inline-flex; flex-direction: column;">
+            <div class="syllable-chord" style="color: var(--chord-color); font-weight: 600; font-size: ${1.15 * scC}rem; font-family: ${curC};">[Dm]</div>
+            <div class="syllable-text" style="font-size: ${1.1 * scL}rem; font-family: ${curL}; line-height: 1.15;">дружно мы хвалу поём!</div>
+          </div>
+        </div>
+      `;
+    }
+
+    labCard.appendChild(previewBox);
+    setTimeout(updateLabPreview, 20);
+    wrap.appendChild(labCard);
+
+    // Быстрый переход к любой песне каталога для проверки
+    const quickSongCard = Renderer.createElement('div', {
+      className: 'song-card',
+      style: 'flex-direction: column; align-items: stretch; gap: 0.75rem; background: var(--bg-card);'
+    }, [
+      Renderer.createElement('h3', { className: 'text-main', style: 'margin: 0; font-size: 1rem; font-weight: 800;' }, ['📖 Проверить на песне из каталога']),
+      Renderer.createElement('p', { className: 'text-sm text-muted', style: 'margin: 0;' }, [
+        'Перейдите на вкладку «Песни», откройте любую песню или нажмите «На сцену» в концертном режиме — выбранный вами шрифт текста и аккордов мгновенно применится ко всему репертуару!'
+      ]),
+      Renderer.createElement('div', { style: 'display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.25rem;' }, [
+        Renderer.createElement('button', {
+          className: 'btn btn-primary btn-sm',
+          dataset: { action: 'nav-tab', tab: 'catalog' }
+        }, ['Перейти к песням']),
+        Renderer.createElement('button', {
+          className: 'btn btn-outline btn-sm',
+          dataset: { action: 'open-song', songId: '0042' }
+        }, ['Открыть #0042 Адонай'])
+      ])
+    ]);
+    wrap.appendChild(quickSongCard);
+
+    container.appendChild(wrap);
+  }
+
   renderSettingsView(container) {
     container.innerHTML = '';
     const state = store.getState();
