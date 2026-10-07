@@ -5239,11 +5239,33 @@ class SongParser {
         continue;
       }
 
-      const isPureSection = /^(\[(?:V\d*|C|B|P|E|I)\]|ПРИПЕВ:?|КУПЛЕТ:?|БРИДЖ:?|ПР\.:?|BRIDGE:?|CHORUS:?)$/i.test(trimmed);
-      if (isPureSection) {
+      // РАСПОЗНАВАНИЕ СЕКЦИЙ: [V1]-[Vn], [C], [B], Пр., Бр., Куплеты
+      const mSec = trimmed.match(/^\[?(V\d+|C\d*|B\d*|T|E|Intro|Outro|ПРИПЕВ|КУПЛЕТ\s*\d*|БРИДЖ|ПР\.|БР\.)\]?$/i);
+      if (mSec) {
+        const rawTag = mSec[1].trim();
+        let displayTitle = rawTag;
+        let secType = 'verse'; // 'verse', 'chorus', 'bridge'
+
+        if (/^V(\d+)$/i.test(rawTag)) {
+          const num = rawTag.match(/^V(\d+)$/i)[1];
+          displayTitle = num + '.';
+          secType = 'verse';
+        } else if (/^(?:C\d*|ПРИПЕВ|ПР\.)$/i.test(rawTag)) {
+          displayTitle = 'Пр.';
+          secType = 'chorus';
+        } else if (/^(?:B\d*|БРИДЖ|БР\.)$/i.test(rawTag)) {
+          displayTitle = 'Бр.';
+          secType = 'bridge';
+        } else if (/^КУПЛЕТ\s*(\d*)$/i.test(rawTag)) {
+          const num = rawTag.match(/^КУПЛЕТ\s*(\d*)$/i)[1] || '1';
+          displayTitle = num + '.';
+          secType = 'verse';
+        }
+
         parsedLines.push({
           type: 'section',
-          text: trimmed.replace(/[\[\]]/g, '')
+          text: displayTitle,
+          secType: secType
         });
         continue;
       }
@@ -6022,17 +6044,34 @@ class Renderer {
     }
     const cleanLines = parsedLines.slice(firstContentIdx);
 
+    let activeSectionType = 'verse';
+
     for (const line of cleanLines) {
       if (line.type === 'empty') {
         // Рендерим пустую строку между куплетами и припевами как в обычном, так и в концертном режиме
         container.appendChild(Renderer.createElement('div', { className: 'lyrics-render-line empty-line' }));
       } else if (line.type === 'section') {
-        container.appendChild(Renderer.createElement('div', { className: 'lyrics-render-line section-header' }, [line.text]));
+        activeSectionType = line.secType || 'verse';
+        const secHeaderClasses = 'lyrics-render-line section-header' +
+          (activeSectionType === 'chorus' ? ' section-chorus-header' : (activeSectionType === 'bridge' ? ' section-bridge-header' : ' section-verse-header'));
+
+        // Для припевов и бриджей применяем отступ 4 пробела
+        const secHeaderStyle = (activeSectionType === 'chorus' || activeSectionType === 'bridge')
+          ? 'padding-left: 2ch;'
+          : '';
+
+        container.appendChild(Renderer.createElement('div', {
+          className: secHeaderClasses,
+          style: secHeaderStyle
+        }, [line.text]));
       } else if (line.type === 'line') {
         // Проверяем, есть ли хоть в одном юните этой строки аккорд
         const hasAnyChord = line.units && line.units.some(u => u.chord && u.chord.trim().length > 0);
+        const isIndentedSection = (activeSectionType === 'chorus' || activeSectionType === 'bridge');
         const lineWrap = Renderer.createElement('div', {
-          className: 'lyrics-render-line' + (hasAnyChord ? ' has-chords' : ' no-chords')
+          className: 'lyrics-render-line' + (hasAnyChord ? ' has-chords' : ' no-chords') +
+                     (activeSectionType === 'chorus' ? ' line-chorus' : (activeSectionType === 'bridge' ? ' line-bridge' : ' line-verse')),
+          style: isIndentedSection ? 'padding-left: 2ch;' : ''
         });
 
         if (!hasAnyChord) {
