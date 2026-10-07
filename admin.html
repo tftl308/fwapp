@@ -1655,6 +1655,33 @@ https://github.com/nodeca/pako/blob/main/LICENSE
 
     
     
+    
+    function checkSectionPrefix(line) {
+      if (!line) return null;
+      const norm = line.replace(/[\u00a0\u200b\t]+/g, ' ').trim();
+      const mVerse = norm.match(/^(\d+)\.\s*(.*)$/);
+      const mChorus = norm.match(/^ПР\.\s*(.*)$/i);
+      const mBridge = norm.match(/^БР\.\s*(.*)$/i);
+      const mExplicitTag = norm.match(/^\[(V\d+|C\d*|B\d*|T|E|Intro|Outro)\]\s*(.*)$/i);
+
+      if (mVerse) {
+        const num = mVerse[1];
+        return { tag: 'V' + num, kind: 'verse-' + num, header: '[V' + num + ']', rest: mVerse[2] };
+      }
+      if (mChorus) {
+        return { tag: 'C', kind: 'chorus', header: '[C]', rest: mChorus[1] };
+      }
+      if (mBridge) {
+        return { tag: 'B', kind: 'bridge', header: '[B]', rest: mBridge[1] };
+      }
+      if (mExplicitTag) {
+        const tag = mExplicitTag[1].toUpperCase();
+        const kind = tag.startsWith('C') ? 'chorus' : (tag.startsWith('B') ? 'bridge' : 'verse');
+        return { tag: tag, kind: kind, header: '[' + tag + ']', rest: mExplicitTag[2] };
+      }
+      return null;
+    }
+
     function realignSongModel(songModel) {
       if (!songModel || !songModel.lines) return;
       songModel.lines.forEach(line => {
@@ -2032,89 +2059,32 @@ ${lyricsBody}
           continue;
         }
 
-        // 1. Проверяем маркеры секций строго по канону:
-        // Нормализуем неразрывные пробелы и множественные пробелы в начале
-        const normLine = trimmed.replace(/[\u00a0\u200b\t]+/g, ' ').trim();
-
-        // Куплеты: строго "1.", "2.", "3." в начале строки -> [V1], [V2]...
-        // Припевы: строго "Пр." с обязательной точкой (без ложных срабатываний на слова типа Правда, Прекрасный) -> [C]
-        // Бриджи: строго "Бр." с обязательной точкой (без ложных срабатываний на слова типа Братья, Бремя) -> [B]
-        const mVerseNum = normLine.match(/^(\d+)\.\s*(.*)$/);
-        const mChorus = normLine.match(/^ПР\.\s*(.*)$/i);
-        const mBridge = normLine.match(/^БР\.\s*(.*)$/i);
-        const mExplicitTag = normLine.match(/^\[(V\d+|C|B|T|E|Intro|Outro)\]\s*(.*)$/i);
-
-        if (mVerseNum) {
-          const num = mVerseNum[1];
-          const rest = mVerseNum[2];
+        // 1. Проверяем наличие префикса секции на ТЕКУЩЕЙ строке (например, "1.", "Пр.", "Бр.")
+        const curSec = checkSectionPrefix(trimmed);
+        if (curSec) {
           hasExplicitSections = true;
-          currentSectionKey = 'V' + num;
-          currentSectionKind = 'verse-' + num;
+          currentSectionKey = curSec.tag;
+          currentSectionKind = curSec.kind;
           song.lines.push({
-            kind: 'section-header',
+            kind: curSec.tag.startsWith('C') ? 'chorus-header' : 'section-header',
             sectionKey: currentSectionKey,
-            lyric: '[' + currentSectionKey + ']',
+            lyric: curSec.header,
             chords: []
           });
-          if (rest) {
-            bodyLines[i] = rest;
+
+          // Если после префикса есть остаток:
+          // Если остаток - это аккордовая строка, обновляем bodyLines[i] и продолжаем парсить ее как аккорды!
+          // Если обычный текст - обновляем bodyLines[i] и парсим дальше.
+          if (curSec.rest && curSec.rest.trim()) {
+            bodyLines[i] = curSec.rest;
             continue;
           }
           i++;
           continue;
-        } else if (mChorus) {
-          const rest = mChorus[1];
-          hasExplicitSections = true;
-          currentSectionKey = 'C';
-          currentSectionKind = 'chorus';
-          song.lines.push({
-            kind: 'chorus-header',
-            sectionKey: 'C',
-            lyric: '[C]',
-            chords: []
-          });
-          if (rest) {
-            bodyLines[i] = rest;
-            continue;
-          }
-          i++;
-          continue;
-        } else if (mBridge) {
-          const rest = mBridge[1];
-          hasExplicitSections = true;
-          currentSectionKey = 'B';
-          currentSectionKind = 'bridge';
-          song.lines.push({
-            kind: 'section-header',
-            sectionKey: 'B',
-            lyric: '[B]',
-            chords: []
-          });
-          if (rest) {
-            bodyLines[i] = rest;
-            continue;
-          }
-          i++;
-          continue;
-        } else if (mExplicitTag) {
-          const tag = mExplicitTag[1].toUpperCase();
-          const rest = mExplicitTag[2];
-          hasExplicitSections = true;
-          currentSectionKey = tag;
-          currentSectionKind = tag.startsWith('C') ? 'chorus' : (tag.startsWith('B') ? 'bridge' : 'verse');
-          song.lines.push({
-            kind: tag.startsWith('C') ? 'chorus-header' : 'section-header',
-            sectionKey: tag,
-            lyric: '[' + tag + ']',
-            chords: []
-          });
-          if (rest) {
-            bodyLines[i] = rest;
-            continue;
-          }
-          i++;
-          continue;
-        } else if (/^(вступление|интро|проигрыш|intro|outro|кода)[\s\.:]*(.*)$/i.test(trimmed) && !isChordLine(trimmed)) {
+        }
+
+        // 2. Проверяем строчные заголовки интро/коды без аккордов
+        if (/^(вступление|интро|проигрыш|intro|outro|кода)[\s\.:]*(.*)$/i.test(trimmed) && !isChordLine(trimmed)) {
           const m = trimmed.match(/^(вступление|интро|проигрыш|intro|outro|кода)[\s\.:]*(.*)$/i);
           const tag = /outro|кода/i.test(m[1]) ? 'E' : 'Intro';
           hasExplicitSections = true;
@@ -2126,7 +2096,7 @@ ${lyricsBody}
             lyric: '[' + tag + ']',
             chords: []
           });
-          if (m[2]) {
+          if (m[2] && m[2].trim()) {
             bodyLines[i] = m[2];
             continue;
           }
@@ -2134,8 +2104,7 @@ ${lyricsBody}
           continue;
         }
 
-        // Если песня не содержит явных обозначений куплетов/припевов,
-        // то делаем такие строки одним куплетом [V1]
+        // 3. Если в песне нет явных обозначений, создаем по умолчанию куплет [V1]
         if (!hasExplicitSections && !hasStartedFirstVerse) {
           hasStartedFirstVerse = true;
           currentSectionKey = 'V1';
@@ -2148,7 +2117,7 @@ ${lyricsBody}
           });
         }
 
-        // Check if line contains chords
+        // 4. Проверяем, является ли текущая строка аккордовой
         if (isChordLine(trimmed)) {
           // Tokenize chords and their character offsets
           // Pre-processing: split hyphen-separated chords (e.g. "Dm-E" -> "Dm E")
@@ -2173,10 +2142,32 @@ ${lyricsBody}
             chordTokens.push({ text: chordName, x: xPos, rawCol: match.index });
           }
 
-          // Check next line: is it the corresponding lyric line?
+          // Проверяем следующую строку: является ли она соответствующей строкой текста?
           const nextLine = bodyLines[i + 1];
           if (nextLine !== undefined && !isChordLine(nextLine.trim())) {
-            const lyricText = nextLine;
+            let lyricText = nextLine;
+
+            // КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ:
+            // Проверяем, начинается ли строка текста со спецмаркера секции: "Пр.", "Бр.", "1."
+            // Например:
+            // **F G**
+            // Пр. О, ты земля святая, здесь виден Арарат!
+            const nextSec = checkSectionPrefix(nextLine.trim());
+            if (nextSec) {
+              hasExplicitSections = true;
+              currentSectionKey = nextSec.tag;
+              currentSectionKind = nextSec.kind;
+              // Добавляем маркер секции перед строкой
+              song.lines.push({
+                kind: nextSec.tag.startsWith('C') ? 'chorus-header' : 'section-header',
+                sectionKey: currentSectionKey,
+                lyric: nextSec.header,
+                chords: []
+              });
+              // Очищаем текст строки от префикса "Пр." / "Бр." / "1."
+              lyricText = nextSec.rest || '';
+            }
+
             const xs = computeCharXPositions(lyricText);
             const snaps = buildLyricSnapPoints(lyricText, xs);
             const assignedCharIndices = alignChordsDP(chordTokens, snaps, 16, lyricText, currentLine);
@@ -2200,10 +2191,10 @@ ${lyricsBody}
               chords: chordsList
             });
 
-            i += 2; // Handled chord + lyric pair
+            i += 2; // Обработана пара аккорды + текст
             continue;
           } else {
-            // Chord-only line (e.g. Intro or Solo)
+            // Строка только с аккордами (например, вступление или соло)
             const chordsList = chordTokens.map(t => ({
               name: t.text,
               charIndex: t.rawCol,
@@ -2221,7 +2212,7 @@ ${lyricsBody}
             continue;
           }
         } else if (trimmed.includes('[') && trimmed.includes(']')) {
-          // Line already in ChordPro format: [Am]Белый снег
+          // Строка уже в ChordPro разметке: [Am]Белый снег
           const chordsList = [];
           let cleanLyric = '';
           let cIndex = 0;
@@ -2242,14 +2233,15 @@ ${lyricsBody}
           }
 
           song.lines.push({
-            kind: 'verse',
+            kind: currentSectionKind || 'verse',
+            sectionKey: currentSectionKey,
             lyric: cleanLyric,
             chords: chordsList
           });
           i++;
           continue;
         } else {
-          // Regular text line without chords
+          // Обычная текстовая строка без аккордов
           song.lines.push({
             kind: currentSectionKind,
             sectionKey: currentSectionKey,
