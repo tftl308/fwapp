@@ -26,7 +26,7 @@
       --text-muted: #78716c;
       --accent: #c03000;              /* ПЛАМЕННО-ОГНЕННЫЙ (image-3) */
       --accent-hover: #a02500;
-      --chord-color: #d03000;         /* ЯРКИЙ ОГОНЬ */
+      --chord-color: #8c1d00; /* ГЛУБОКИЙ ТЁМНЫЙ ОГОНЬ */         /* ЯРКИЙ ОГОНЬ */
       --section-color: #b02000;
       --badge-bg: #fff1ed;
       --badge-text: #c03000;
@@ -81,7 +81,7 @@
     [data-concert-theme="paper"] {
       --bg-concert: #ffffff;
       --text-concert: #1c1917;
-      --chord-concert: #c2410c;
+      --chord-concert: #7c1a00;
       --section-concert: #9a3412;
     }
     [data-concert-theme="amber"] {
@@ -840,14 +840,14 @@
 
     .syllable-chord {
       color: var(--chord-color);
-      font-weight: 800;
+      font-weight: 600;
       font-size: var(--font-chords);
       font-family: var(--font-family-chords);
       min-height: 1.25em;
       line-height: 1.1;
       padding-right: 0.25rem;
       letter-spacing: 0.02em;
-      text-shadow: 0 0 0.4px currentColor;
+      /* text-shadow removed */
     }
 
     .syllable-text {
@@ -1275,7 +1275,7 @@
       color: #fafafa !important;
     }
     .concert-overlay[data-concert-theme="dark"] .syllable-chord {
-      color: #fb923c !important;
+      color: #ea580c !important; font-weight: 600 !important;
     }
     .concert-overlay[data-concert-theme="dark"] .syllable-text {
       color: #f4f4f5 !important;
@@ -1302,10 +1302,10 @@
     .concert-overlay[data-concert-theme="amber"] .btn-outline {
       background: #1c1917 !important;
       border-color: #b45309 !important;
-      color: #fbbf24 !important;
+      color: #d97706 !important; font-weight: 600 !important;
     }
     .concert-overlay[data-concert-theme="amber"] .syllable-chord {
-      color: #fbbf24 !important;
+      color: #d97706 !important; font-weight: 600 !important;
     }
     .concert-overlay[data-concert-theme="amber"] .syllable-text {
       color: #f59e0b !important;
@@ -1383,12 +1383,12 @@
     }
 
     .concert-body .syllable-chord {
-      color: var(--chord-concert, #c2410c);
+      color: var(--chord-concert, #7c1a00);
       font-size: var(--font-concert);
       line-height: 1.15;
-      font-weight: 800 !important;
+      font-weight: 600 !important;
       font-family: var(--font-family-chords) !important;
-      text-shadow: 0 0 0.5px currentColor;
+      /* text-shadow removed */
       letter-spacing: 0.02em;
     }
 
@@ -7201,31 +7201,37 @@ class AppController {
                    return item && item.song_id === s.id;
                  }) : null);
 
-    // Вычисляем максимальную длину строки в песне (+2 единиц запаса)
-    let maxLineLen = 25;
-    if (song && song.body_plain) {
-      const lines = song.body_plain.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    // 1. ИНДИВИДУАЛЬНЫЙ РАСЧЁТ ДЛЯ КАЖДОЙ ПЕСНИ:
+    // Находим самую длинную строку именно в текущей открытой песне
+    let maxLineLen = 20;
+    if (song) {
+      const textSource = song.lyrics || song.body_plain || song.body_chordpro || '';
+      const lines = textSource.split(/\r?\n/).map(l => l.replace(/\[[^\]]+\]/g, '').trim()).filter(Boolean);
       for (const line of lines) {
         if (line.length > maxLineLen) maxLineLen = line.length;
       }
     }
-    const effectiveMaxLen = maxLineLen + 2; // Добавляется +2 единиц запаса
 
-    // Рассчитываем горизонтальный базовый размер (ch-based) с учетом +2 единиц запаса
-    const charWidthPx = (availWidth - 24) / Math.max(20, effectiveMaxLen);
-    let initialFontSize = Math.min(1.35, Math.max(0.65, charWidthPx / 10.5));
+    // Рассчитываем базовый размер шрифта, чтобы самая длинная строка строго влезала по ширине
+    // Без лишнего раздутого запаса (чистый размер под доступную ширину экрана)
+    const effectiveMaxLen = Math.max(18, maxLineLen + 1);
+    const charWidthPx = (availWidth - 28) / effectiveMaxLen;
+    let initialFontSize = Math.min(1.45, Math.max(0.60, charWidthPx / 9.8));
 
     let fontSize = parseFloat(initialFontSize.toFixed(2));
-    let lineMargin = 0.08;
+    let lineMargin = 0.06;
 
     document.documentElement.style.setProperty('--font-concert', fontSize + 'rem');
     document.documentElement.style.setProperty('--concert-line-margin', lineMargin + 'rem');
 
-    // Проверяем заполнение по вертикали: если песня не помещается, плавно уменьшаем
+    // 2. ВЕРТИКАЛЬНАЯ АДАПТАЦИЯ ДЛЯ ТЕКУЩЕЙ ПЕСНИ:
+    // Если песня длинная и не помещается по высоте вьюпорта, плавно масштабируем шрифт и интервалы вниз,
+    // чтобы весь текст гарантированно уместился на экране без обрезки и скролла.
     let attempts = 0;
-    while (bodyEl.scrollHeight > (availHeight + 6) && fontSize > 0.55 && attempts < 14) {
-      fontSize -= 0.03;
-      if (fontSize < 0.85) lineMargin = 0.04;
+    while (bodyEl.scrollHeight > (availHeight + 2) && fontSize > 0.48 && attempts < 18) {
+      fontSize -= 0.025;
+      if (fontSize < 0.85) lineMargin = 0.03;
+      if (fontSize < 0.65) lineMargin = 0.015;
       document.documentElement.style.setProperty('--font-concert', fontSize.toFixed(2) + 'rem');
       document.documentElement.style.setProperty('--concert-line-margin', lineMargin + 'rem');
       attempts++;
