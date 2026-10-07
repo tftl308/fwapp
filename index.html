@@ -5262,8 +5262,12 @@ class SongParser {
         continue;
       }
 
+      // Очищаем строку от собственных начальных отступов/пробелов (особенно в припевах и бриджах),
+      // чтобы все строки припевов и бриджей выравнивались строго по единому системному отступу в 2 пробела.
+      let lineToTokenize = rawLine.replace(/^[\t\u00a0 ]+/, '');
+
       // Разбиваем строку на части: (аккорд, слог текста)
-      const tokens = rawLine.split(/(\[[^\]]+\])/);
+      const tokens = lineToTokenize.split(/(\[[^\]]+\])/);
       const units = [];
       let pendingChord = '';
 
@@ -6089,9 +6093,10 @@ class Renderer {
         const secHeaderClasses = 'lyrics-render-line section-header' +
           (activeSectionType === 'chorus' ? ' section-chorus-header' : (activeSectionType === 'bridge' ? ' section-bridge-header' : ' section-verse-header'));
 
-        // Для припевов и бриджей применяем отступ 4 пробела
-        const secHeaderStyle = (activeSectionType === 'chorus' || activeSectionType === 'bridge')
-          ? 'padding-left: 2ch;'
+        // Требование: Все строчки припева и бриджа (включая заголовок и все строки) выравниваются со строгим отступом ровно в два пробела (2ch)
+        const isIndented = (activeSectionType === 'chorus' || activeSectionType === 'bridge');
+        const secHeaderStyle = isIndented
+          ? 'margin-left: 2ch; padding-left: 0;'
           : '';
 
         container.appendChild(Renderer.createElement('div', {
@@ -6105,7 +6110,7 @@ class Renderer {
         const lineWrap = Renderer.createElement('div', {
           className: 'lyrics-render-line' + (hasAnyChord ? ' has-chords' : ' no-chords') +
                      (activeSectionType === 'chorus' ? ' line-chorus' : (activeSectionType === 'bridge' ? ' line-bridge' : ' line-verse')),
-          style: isIndentedSection ? 'padding-left: 2ch;' : ''
+          style: isIndentedSection ? 'margin-left: 2ch; padding-left: 0;' : ''
         });
 
         if (!hasAnyChord) {
