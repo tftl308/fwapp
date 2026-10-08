@@ -7319,32 +7319,7 @@ class AppController {
     store.setState({ concertFontSize: fontSize });
   }
 
-    // Ровно по самой длинной строке песни без добавочного запаса (+0)
-    const effectiveMaxLen = Math.max(12, maxLineLen);
-    const charWidthPx = (availWidth - 24) / effectiveMaxLen;
-    let initialFontSize = Math.min(1.50, Math.max(0.55, charWidthPx / 9.5));
 
-    let fontSize = parseFloat(initialFontSize.toFixed(2));
-    let lineMargin = 0.05;
-
-    document.documentElement.style.setProperty('--font-concert', fontSize + 'rem');
-    document.documentElement.style.setProperty('--concert-line-margin', lineMargin + 'rem');
-
-    // 2. ВЕРТИКАЛЬНАЯ АДАПТАЦИЯ ПО ВЫСОТЕ ЭКРАНА:
-    // Если суммарная высота песни не помещается в экран, плавно уменьшаем шрифт,
-    // чтобы весь текст гарантированно уместился на экране целиком
-    let attempts = 0;
-    while (bodyEl.scrollHeight > (availHeight + 2) && fontSize > 0.45 && attempts < 20) {
-      fontSize -= 0.025;
-      if (fontSize < 0.85) lineMargin = 0.03;
-      if (fontSize < 0.65) lineMargin = 0.015;
-      document.documentElement.style.setProperty('--font-concert', fontSize.toFixed(2) + 'rem');
-      document.documentElement.style.setProperty('--concert-line-margin', lineMargin + 'rem');
-      attempts++;
-    }
-
-    store.setState({ concertFontSize: fontSize });
-  }
 
   showConcertSettingsModal() {
     const existing = document.getElementById('concert-settings-modal');
