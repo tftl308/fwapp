@@ -6704,8 +6704,9 @@ class AppController {
   }
 
     setupHistoryBackNavigation() {
+    if (typeof history === 'undefined' || !history.pushState) return;
     // Предотвращение случайного закрытия PWA при нажатии аппаратной кнопки «Назад» на телефоне
-    history.pushState({ page: 'home' }, '');
+    try { history.pushState({ page: 'home' }, ''); } catch(e) {}
     window.addEventListener('popstate', (e) => {
       const state = store.getState();
       const concertOverlay = document.getElementById('concert-overlay');
@@ -6901,8 +6902,8 @@ class AppController {
     let touchStartY = 0;
     let swipedSongCard = null;
     let isHorizontalSwipe = false;
-    this.this.swipeTriggered = false; window._swipeTriggered = false;
-    window._this.swipeTriggered = false; window._swipeTriggered = false;
+    this.swipeTriggered = false;
+    window._swipeTriggered = false;
 
     document.addEventListener('touchstart', (e) => {
       const card = e.target.closest('.song-card');

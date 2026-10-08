@@ -6783,8 +6783,9 @@ class AppController {
   }
 
     setupHistoryBackNavigation() {
+    if (typeof history === 'undefined' || !history.pushState) return;
     // Предотвращение случайного закрытия PWA при нажатии аппаратной кнопки «Назад» на телефоне
-    history.pushState({ page: 'home' }, '');
+    try { history.pushState({ page: 'home' }, ''); } catch(e) {}
     window.addEventListener('popstate', (e) => {
       const state = store.getState();
       const concertOverlay = document.getElementById('concert-overlay');
