@@ -1,5 +1,5 @@
 // Service Worker для PWA "Огненный Ветер" (GitHub Pages tftl308.github.io)
-const CACHE_NAME = 'ov-cache-v4.3.0-20261005';
+const CACHE_NAME = 'ov-cache-v4.3.5-1791537587';
 
 // Кэшируем только файлы приложения (без MP3 музыки!)
 const PRECACHE_ASSETS = [

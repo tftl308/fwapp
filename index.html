@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=0.5, maximum-scale=5.0, user-scalable=yes, viewport-fit=cover">
   <meta name="theme-color" content="#c03000">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
@@ -100,9 +100,8 @@
 
     html, body {
       width: 100%;
-      max-width: 100vw;
-      height: 100%;
-      overflow-x: hidden !important;
+      min-height: 100%;
+      touch-action: pan-x pan-y pinch-zoom;
       position: relative;
       font-family: var(--font-family-ui);
       background-color: var(--bg-primary);
@@ -250,6 +249,10 @@
       font-size: 0.95rem;
       resize: vertical;
       font-family: inherit;
+      touch-action: auto !important;
+      user-select: text !important;
+      -webkit-user-select: text !important;
+      pointer-events: auto !important;
     }
 
     input.input-text {
@@ -262,6 +265,10 @@
       outline: none;
       font-size: 0.95rem;
       width: 100%;
+      touch-action: auto !important;
+      user-select: text !important;
+      -webkit-user-select: text !important;
+      pointer-events: auto !important;
     }
 
     main.content-view {
@@ -271,7 +278,7 @@
       width: 100%;
       margin: 0 auto;
       box-sizing: border-box;
-      overflow-x: hidden;
+      touch-action: pan-x pan-y pinch-zoom;
     }
 
     /* Адаптивная резинка для критичных экранов 300px - 500px */
@@ -1387,19 +1394,15 @@
       font-size: var(--font-concert);
       line-height: 1.15;
       font-weight: 700 !important;
-      font-family: var(--font-family-chords) !important;
-      /* text-shadow removed */
-      letter-spacing: var(--concert-letter-spacing, 0.02em);
+      font-family: var(--font-family-chords), inherit !important;
+      letter-spacing: var(--concert-letter-spacing, 0.02em) !important;
     }
-    .concert-body .syllable-text {
-      letter-spacing: var(--concert-letter-spacing, normal);
-    }
-
     .concert-body .syllable-text {
       font-size: var(--font-concert);
       line-height: 1.25;
-      font-family: var(--font-family-lyrics) !important;
+      font-family: var(--font-family-lyrics), inherit !important;
       font-weight: 400 !important;
+      letter-spacing: var(--concert-letter-spacing, normal) !important;
     }
 
     .concert-body .lyrics-render-line.section-header {
@@ -6701,6 +6704,8 @@ class AppController {
       document.documentElement.style.setProperty('--font-family-lyrics', savedAppFont);
       document.documentElement.style.setProperty('--font-family-chords', savedAppFont);
       document.documentElement.style.setProperty('--font-family-app', savedAppFont);
+      document.documentElement.style.setProperty('--font-family-ui', savedAppFont);
+      document.body.style.fontFamily = savedAppFont;
     }
     const savedConcertLenOffset = parseInt(localStorage.getItem('ov_concert_len_offset') || '0', 10);
     const savedConcertLetterSpacing = parseFloat(localStorage.getItem('ov_concert_letter_spacing') || '1.0');
@@ -6998,41 +7003,7 @@ class AppController {
   }
 
   setupSongDetailTouchGestures() {
-    let initialPinchDist = 0;
-    let initialScale = 1.0;
-    let currentScale = 1.0;
-
-    document.addEventListener('touchstart', (e) => {
-      const box = document.getElementById('lyrics-box');
-      if (!box) return;
-      if (e.touches.length === 2) {
-        initialPinchDist = Math.hypot(
-          e.touches[0].clientX - e.touches[1].clientX,
-          e.touches[0].clientY - e.touches[1].clientY
-        );
-        initialScale = currentScale;
-      }
-    }, { passive: true });
-
-    document.addEventListener('touchmove', (e) => {
-      const box = document.getElementById('lyrics-box');
-      if (!box || initialPinchDist <= 0 || e.touches.length !== 2) return;
-      const currentDist = Math.hypot(
-        e.touches[0].clientX - e.touches[1].clientX,
-        e.touches[0].clientY - e.touches[1].clientY
-      );
-      const ratio = currentDist / initialPinchDist;
-      currentScale = Math.max(0.65, Math.min(2.8, initialScale * ratio));
-      box.style.transformOrigin = 'top left';
-      box.style.transform = 'scale(' + currentScale.toFixed(2) + ')';
-      box.style.width = (100 / currentScale).toFixed(1) + '%';
-    }, { passive: true });
-
-    document.addEventListener('touchend', (e) => {
-      if (e.touches.length === 0) {
-        initialPinchDist = 0;
-      }
-    }, { passive: true });
+    // Естественный системный Pinch-to-Zoom поддерживается браузером и PWA через touch-action и viewport
   }
 
   setupDelegatedEvents() {
@@ -7069,6 +7040,10 @@ class AppController {
         document.documentElement.style.setProperty('--font-family-lyrics', chosenFamily);
         document.documentElement.style.setProperty('--font-family-chords', chosenFamily);
         document.documentElement.style.setProperty('--font-family-app', chosenFamily);
+        document.documentElement.style.setProperty('--font-family-ui', chosenFamily);
+        document.body.style.fontFamily = chosenFamily;
+        const concertOverlay = document.getElementById('concert-overlay');
+        if (concertOverlay) concertOverlay.style.fontFamily = chosenFamily;
         AppController.showToast('Шрифт успешно установлен!');
       } else if (action === 'select-song-profile-tab') {
         const prof = e.target.value;
@@ -7337,6 +7312,13 @@ class AppController {
     const savedSpacing = parseFloat(localStorage.getItem('ov_concert_letter_spacing') || '1.0');
     store.setState({ concertLenOffset: savedOffset, concertLetterSpacing: savedSpacing });
     document.documentElement.style.setProperty('--concert-letter-spacing', (savedSpacing * 0.02).toFixed(3) + 'em');
+    const savedAppFont = localStorage.getItem('ov_app_font_family');
+    if (savedAppFont) {
+      document.documentElement.style.setProperty('--font-family-lyrics', savedAppFont);
+      document.documentElement.style.setProperty('--font-family-chords', savedAppFont);
+      const ov = document.getElementById('concert-overlay');
+      if (ov) ov.style.fontFamily = savedAppFont;
+    }
     audioPlayer.pause();
     const docked = document.getElementById('docked-player');
     if (docked) docked.style.display = 'none';
@@ -7371,6 +7353,13 @@ class AppController {
     const savedSpacing = parseFloat(localStorage.getItem('ov_concert_letter_spacing') || '1.0');
     store.setState({ concertLenOffset: savedOffset, concertLetterSpacing: savedSpacing });
     document.documentElement.style.setProperty('--concert-letter-spacing', (savedSpacing * 0.02).toFixed(3) + 'em');
+    const savedAppFont = localStorage.getItem('ov_app_font_family');
+    if (savedAppFont) {
+      document.documentElement.style.setProperty('--font-family-lyrics', savedAppFont);
+      document.documentElement.style.setProperty('--font-family-chords', savedAppFont);
+      const ov = document.getElementById('concert-overlay');
+      if (ov) ov.style.fontFamily = savedAppFont;
+    }
     const state = store.getState();
     const targetId = songId || state.currentSongId;
     audioPlayer.pause();
@@ -10198,8 +10187,7 @@ async handleBatchAudioUpload(files) {
     container.appendChild(lyricsContainer);
     requestAnimationFrame(() => {
       this.fitSongDetailToViewport();
-      const b = document.getElementById('lyrics-box');
-      if (b) { b.style.transform = 'none'; b.style.width = '100%'; }
+      
     });
 
     // 3. Метаданные и заметки (с выпадающим списком ролей)
