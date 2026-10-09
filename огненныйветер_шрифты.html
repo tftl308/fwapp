@@ -1389,7 +1389,10 @@
       font-weight: 700 !important;
       font-family: var(--font-family-chords) !important;
       /* text-shadow removed */
-      letter-spacing: 0.02em;
+      letter-spacing: var(--concert-letter-spacing, 0.02em);
+    }
+    .concert-body .syllable-text {
+      letter-spacing: var(--concert-letter-spacing, normal);
     }
 
     .concert-body .syllable-text {
@@ -5348,6 +5351,72 @@ class SongParser {
 
     return parsedLines;
   }
+
+  static calcSongVisualMaxLen(song) {
+    if (!song) return 15;
+    const cpSource = song.chordpro || song.body_chordpro || '';
+    const cpLines = cpSource.split(/\r?\n/).filter(Boolean);
+    let maxVisualLen = 15;
+    let isChorus = false;
+
+    for (const rawLine of cpLines) {
+      const trimmed = rawLine.trim();
+      if (!trimmed || /^\{[^\}]+\}$/.test(trimmed)) continue;
+      if (/^\[?(?:C\d*|ПРИПЕВ|ПР\.)\]?$/i.test(trimmed)) {
+        isChorus = true;
+        continue;
+      }
+      if (/^\[?(?:B\d*|БРИДЖ|БР\.)\]?$/i.test(trimmed)) {
+        isChorus = true;
+        continue;
+      }
+      if (/^\[?V\d+\]?$/i.test(trimmed) || /^КУПЛЕТ/i.test(trimmed)) {
+        isChorus = false;
+        continue;
+      }
+
+      // Точный расчёт ширины строки по блокам слогов и аккордов
+      const lineToTokenize = rawLine.replace(/^[	  ]+/, '');
+      const parts = lineToTokenize.split(/(\[[^\]]+\])/);
+      const units = [];
+      let pendingChord = '';
+
+      for (const tok of parts) {
+        if (!tok) continue;
+        if (tok.startsWith('[') && tok.endsWith(']')) {
+          pendingChord = tok.slice(1, -1);
+        } else {
+          units.push({ chord: pendingChord, text: tok });
+          pendingChord = '';
+        }
+      }
+      if (pendingChord) {
+        units.push({ chord: pendingChord, text: ' ' });
+      }
+
+      let lineLen = 0;
+      if (units.length > 0) {
+        for (const u of units) {
+          const chordLen = u.chord ? (u.chord.length + 1) : 0;
+          const textLen = u.text ? u.text.length : 0;
+          lineLen += Math.max(textLen, chordLen);
+        }
+      } else {
+        lineLen = lineToTokenize.length;
+      }
+
+      if (isChorus) lineLen += 2; // отступ 2 пробела для припева и бриджа
+      if (lineLen > maxVisualLen) maxVisualLen = lineLen;
+    }
+
+    const lyricsSource = song.lyrics || song.body_plain || '';
+    const lyrLines = lyricsSource.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    for (const l of lyrLines) {
+      if (l.length > maxVisualLen) maxVisualLen = l.length;
+    }
+
+    return maxVisualLen;
+  }
 }
 
 // ==========================================
@@ -6595,12 +6664,17 @@ class AppController {
     const savedNotation = await storage.getSetting('notation') || 'H';
     const savedProfile = await storage.getSetting('currentProfile') || 'none';
     const savedCurPlaylist = await storage.getSetting('currentPlaylistId') || 'pl-temp';
+    const savedConcertLenOffset = parseInt(localStorage.getItem('ov_concert_len_offset') || '0', 10);
+    const savedConcertLetterSpacing = parseFloat(localStorage.getItem('ov_concert_letter_spacing') || '1.0');
+    document.documentElement.style.setProperty('--concert-letter-spacing', (savedConcertLetterSpacing * 0.02).toFixed(3) + 'em');
     document.body.dataset.theme = savedTheme;
     store.setState({
       theme: savedTheme,
       notation: savedNotation,
       currentProfile: savedProfile,
-      currentPlaylistId: savedCurPlaylist
+      currentPlaylistId: savedCurPlaylist,
+      concertLenOffset: savedConcertLenOffset,
+      concertLetterSpacing: savedConcertLetterSpacing
     });
 
     store.subscribe((state) => this.onStateChange(state));
@@ -6858,7 +6932,7 @@ class AppController {
 
   setupSongDetailTouchGestures() {
     let initialPinchDist = 0;
-    let initialFontSize = 1.0;
+    let initialZoom = 1.0;
 
     document.addEventListener('touchstart', (e) => {
       const box = document.getElementById('lyrics-box');
@@ -6868,8 +6942,8 @@ class AppController {
           e.touches[0].clientX - e.touches[1].clientX,
           e.touches[0].clientY - e.touches[1].clientY
         );
-        const cur = parseFloat(box.style.getPropertyValue('--font-lyrics')) || store.getState().detailFontSize || 1.0;
-        initialFontSize = cur;
+        const curZoom = parseFloat(box.style.zoom) || 1.0;
+        initialZoom = curZoom;
       }
     }, { passive: true });
 
@@ -6881,10 +6955,8 @@ class AppController {
         e.touches[0].clientY - e.touches[1].clientY
       );
       const scale = currentDist / initialPinchDist;
-      const newSize = parseFloat(Math.max(0.5, Math.min(3.0, initialFontSize * scale)).toFixed(2));
-      box.style.setProperty('--font-lyrics', newSize + 'rem');
-      box.style.setProperty('--font-chords', newSize + 'rem');
-      store.setState({ detailFontSize: newSize });
+      const newZoom = parseFloat(Math.max(0.6, Math.min(2.8, initialZoom * scale)).toFixed(2));
+      box.style.zoom = newZoom;
     }, { passive: true });
 
     document.addEventListener('touchend', (e) => {
@@ -6906,7 +6978,14 @@ class AppController {
 
     document.addEventListener('change', (e) => {
       const action = e.target.dataset.action;
-      if (action === 'select-profile-dropdown') {
+      if (action === 'change-concert-letter-spacing') {
+        const val = parseFloat(e.target.value);
+        store.setState({ concertLetterSpacing: val });
+        localStorage.setItem('ov_concert_letter_spacing', String(val));
+        document.documentElement.style.setProperty('--concert-letter-spacing', (val * 0.02).toFixed(3) + 'em');
+        const lbl = document.getElementById('concert-spacing-val-label');
+        if (lbl) lbl.textContent = val.toFixed(1);
+      } else if (action === 'select-profile-dropdown') {
         const prof = e.target.value;
         storage.saveSetting('currentProfile', prof);
         store.setState({ currentProfile: prof });
@@ -7300,8 +7379,7 @@ class AppController {
     const bodyEl = document.getElementById('concert-body');
     if (!bodyEl) return;
     const availWidth = bodyEl.clientWidth;
-    const availHeight = bodyEl.clientHeight;
-    if (availWidth <= 0 || availHeight <= 0) return;
+    if (availWidth <= 0) return;
 
     const state = store.getState();
     const song = state.songs.find(s => s.id === (state.concertSingleSongId || state.currentSongId)) ||
@@ -7310,44 +7388,21 @@ class AppController {
                    return item && item.song_id === s.id;
                  }) : null);
 
-    // 1. ИНДИВИДУАЛЬНЫЙ РАСЧЁТ ДЛЯ КАЖДОЙ ПЕСНИ:
-    // Находим реальную максимальную длину строки открытой песни (текста и аккордов)
-    let maxLineLen = 15;
-    if (song) {
-      const cpSource = song.chordpro || song.body_chordpro || '';
-      const cpLines = cpSource.split(/\r?\n/).filter(Boolean);
-      for (const line of cpLines) {
-        if (/^\s*\{[^\}]+\}\s*$/.test(line)) continue;
-        const textOnly = line.replace(/\[[^\]]+\]/g, '').trim();
-        const chordsOnly = (line.match(/\[[^\]]+\]/g) || []).map(c => c.slice(1, -1)).join(' ');
-        const effectiveLineLen = Math.max(textOnly.length, chordsOnly.length);
-        if (effectiveLineLen > maxLineLen) maxLineLen = effectiveLineLen;
-      }
+    const baseMaxLen = SongParser.calcSongVisualMaxLen(song);
+    const offset = parseInt(state.concertLenOffset || 0, 10);
+    // Самая широкая строка + 1 символ + пользовательское смещение из настроек
+    const effectiveMaxLen = Math.max(10, baseMaxLen + 1 + offset);
 
-      const lyricsSource = song.lyrics || song.body_plain || '';
-      const lyrLines = lyricsSource.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
-      for (const line of lyrLines) {
-        if (line.length > maxLineLen) maxLineLen = line.length;
-      }
-    }
-
-    // Рассчитываем размер шрифта так, чтобы самая широкая строка заполнила экран от края до края:
-    // (Делитель уменьшен с 9.5 до 6.8, что даёт точное увеличение на +35-40% для полного заполнения)
-    // Самая широкая строка + 1 символ запаса
-    const effectiveMaxLen = Math.max(12, maxLineLen + 1);
-    const charWidthPx = (availWidth - 20) / effectiveMaxLen;
-    let initialFontSize = Math.min(2.20, Math.max(0.70, charWidthPx / 6.8));
-
+    // Рассчитываем размер шрифта так, чтобы самая широкая строка заполнила ширину экрана
+    const charWidthPx = (availWidth - 24) / effectiveMaxLen;
+    let initialFontSize = Math.min(2.50, Math.max(0.65, charWidthPx / 8.8));
     let fontSize = parseFloat(initialFontSize.toFixed(2));
     let lineMargin = 0.05;
 
     document.documentElement.style.setProperty('--font-concert', fontSize + 'rem');
     document.documentElement.style.setProperty('--concert-line-margin', lineMargin + 'rem');
-
-    // Требование: главное чтобы влезала самая широкая строка + 1 символ, без сжатия по высоте!
     store.setState({ concertFontSize: fontSize });
   }
-
 
   fitSongDetailToViewport() {
     const box = document.getElementById('lyrics-box');
@@ -7359,34 +7414,20 @@ class AppController {
     const song = state.songs.find(s => s.id === state.currentSongId);
     if (!song) return;
 
-    let maxLineLen = 15;
-    const cpSource = song.chordpro || song.body_chordpro || '';
-    const cpLines = cpSource.split(/\r?\n/).filter(Boolean);
-    for (const line of cpLines) {
-      if (/^\s*\{[^\}]+\}\s*$/.test(line)) continue;
-      const textOnly = line.replace(/\[[^\]]+\]/g, '').trim();
-      const chordsOnly = (line.match(/\[[^\]]+\]/g) || []).map(c => c.slice(1, -1)).join(' ');
-      const effectiveLineLen = Math.max(textOnly.length, chordsOnly.length);
-      if (effectiveLineLen > maxLineLen) maxLineLen = effectiveLineLen;
-    }
+    // Точный расчёт самой длинной строки с учётом аккордов и слогов
+    const baseMaxLen = SongParser.calcSongVisualMaxLen(song);
+    // Самая широкая строка + 1 символ запаса
+    const effectiveMaxLen = Math.max(10, baseMaxLen + 1);
 
-    const lyricsSource = song.lyrics || song.body_plain || '';
-    const lyrLines = lyricsSource.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
-    for (const line of lyrLines) {
-      if (line.length > maxLineLen) maxLineLen = line.length;
-    }
-
-    // Динамический подбор: самая широкая строка + 1 символ без ограничения по высоте
-    const effectiveMaxLen = Math.max(12, maxLineLen + 1);
-    const charWidthPx = (availWidth - 16) / effectiveMaxLen;
-    let computedRem = Math.min(1.80, Math.max(0.70, charWidthPx / 7.2));
+    const charWidthPx = (availWidth - 28) / effectiveMaxLen;
+    // Делитель 9.0 для естественной пропорции символов sans-serif шрифтов
+    let computedRem = Math.min(1.60, Math.max(0.70, charWidthPx / 9.0));
     let fontSize = parseFloat(computedRem.toFixed(2));
 
     box.style.setProperty('--font-lyrics', fontSize + 'rem');
     box.style.setProperty('--font-chords', fontSize + 'rem');
     store.setState({ detailFontSize: fontSize });
   }
-
 
   showConcertSettingsModal() {
     const existing = document.getElementById('concert-settings-modal');
@@ -8002,6 +8043,26 @@ case 'clear-search': {
           'dark-stage': 'Тёмная сцена (ночной режим)'
         };
         AppController.showToast('Тема: ' + names[nextTheme]);
+        break;
+      }
+
+      case 'concert-offset-minus': {
+        const cur = (store.getState().concertLenOffset || 0) - 1;
+        store.setState({ concertLenOffset: cur });
+        localStorage.setItem('ov_concert_len_offset', String(cur));
+        const lbl = document.getElementById('concert-offset-val-label');
+        if (lbl) lbl.textContent = (cur > 0 ? '+' : '') + cur;
+        AppController.showToast('Поправка длины строки: ' + (cur > 0 ? '+' : '') + cur);
+        break;
+      }
+
+      case 'concert-offset-plus': {
+        const cur = (store.getState().concertLenOffset || 0) + 1;
+        store.setState({ concertLenOffset: cur });
+        localStorage.setItem('ov_concert_len_offset', String(cur));
+        const lbl = document.getElementById('concert-offset-val-label');
+        if (lbl) lbl.textContent = (cur > 0 ? '+' : '') + cur;
+        AppController.showToast('Поправка длины строки: ' + (cur > 0 ? '+' : '') + cur);
         break;
       }
 
@@ -11279,6 +11340,55 @@ async handleBatchAudioUpload(files) {
     });
     fontSelectWrap.appendChild(fontSelect);
     fontCard.appendChild(fontSelectWrap);
+
+    // НАСТРОЙКИ ШРИФТА РЕЖИМА КОНЦЕРТ
+    const concertControlsWrap = Renderer.createElement('div', {
+      style: 'margin-top: 1rem; padding-top: 0.75rem; border-top: 1px dashed var(--border-color); display: flex; flex-direction: column; gap: 0.75rem;'
+    });
+    concertControlsWrap.appendChild(Renderer.createElement('div', {
+      style: 'font-size: 0.85rem; font-weight: 700; color: var(--text-main);'
+    }, ['🎤 Тонкая настройка шрифта Концертного режима:']));
+
+    // 1) Поправка к эффективной длине строки (+- символов)
+    const offsetRow = Renderer.createElement('div', { style: 'display: flex; align-items: center; justify-content: space-between; gap: 0.5rem;' });
+    offsetRow.appendChild(Renderer.createElement('span', { style: 'font-size: 0.82rem; color: var(--text-muted);' }, ['Поправка длины строки (символов):']));
+    
+    const offsetBtns = Renderer.createElement('div', { style: 'display: flex; align-items: center; gap: 0.4rem;' });
+    const btnOffsetMinus = Renderer.createElement('button', { className: 'btn btn-outline btn-sm', dataset: { action: 'concert-offset-minus' } }, ['-1']);
+    const offsetValLabel = Renderer.createElement('span', { id: 'concert-offset-val-label', style: 'font-weight: 700; min-width: 30px; text-align: center;' }, [
+      (state.concertLenOffset > 0 ? '+' : '') + (state.concertLenOffset || 0)
+    ]);
+    const btnOffsetPlus = Renderer.createElement('button', { className: 'btn btn-outline btn-sm', dataset: { action: 'concert-offset-plus' } }, ['+1']);
+    offsetBtns.appendChild(btnOffsetMinus);
+    offsetBtns.appendChild(offsetValLabel);
+    offsetBtns.appendChild(btnOffsetPlus);
+    offsetRow.appendChild(offsetBtns);
+    concertControlsWrap.appendChild(offsetRow);
+
+    // 2) Межсимвольный интервал (0.5 - 1.5)
+    const spacingRow = Renderer.createElement('div', { style: 'display: flex; align-items: center; justify-content: space-between; gap: 0.5rem;' });
+    spacingRow.appendChild(Renderer.createElement('span', { style: 'font-size: 0.82rem; color: var(--text-muted);' }, ['Межсимвольный интервал (0.5 - 1.5):']));
+
+    const spacingWrap = Renderer.createElement('div', { style: 'display: flex; align-items: center; gap: 0.5rem;' });
+    const spacingInput = Renderer.createElement('input', {
+      type: 'range',
+      id: 'range-concert-letter-spacing',
+      min: '0.5',
+      max: '1.5',
+      step: '0.1',
+      value: String(state.concertLetterSpacing || 1.0),
+      dataset: { action: 'change-concert-letter-spacing' },
+      style: 'width: 100px; cursor: pointer;'
+    });
+    const spacingValLabel = Renderer.createElement('span', { id: 'concert-spacing-val-label', style: 'font-weight: 700; min-width: 32px; text-align: right; font-size: 0.82rem;' }, [
+      (state.concertLetterSpacing || 1.0).toFixed(1)
+    ]);
+    spacingWrap.appendChild(spacingInput);
+    spacingWrap.appendChild(spacingValLabel);
+    spacingRow.appendChild(spacingWrap);
+    concertControlsWrap.appendChild(spacingRow);
+
+    fontCard.appendChild(concertControlsWrap);
     wrap.appendChild(fontCard);
 
 
