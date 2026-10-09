@@ -1662,8 +1662,17 @@ https://github.com/nodeca/pako/blob/main/LICENSE
         const sortedChords = [...line.chords].sort((a, b) => b.charIndex - a.charIndex);
         let result = line.lyric;
         for (const c of sortedChords) {
-          const chordText = c.name || c.chord || '';
+          let chordText = c.name || c.chord || '';
           if (!chordText) continue;
+          if (/[-—]/.test(chordText)) {
+            const parts = chordText.split(/[-—]+/).map(p => p.trim()).filter(Boolean);
+            if (parts.length > 1 && parts.every(p => /^[A-H]/.test(p))) {
+              const splitted = parts.map(p => `[${p}]`).join(' ');
+              const idx = Math.min(Math.max(0, c.charIndex), result.length);
+              result = result.slice(0, idx) + splitted + result.slice(idx);
+              continue;
+            }
+          }
           const idx = Math.min(Math.max(0, c.charIndex), result.length);
           result = result.slice(0, idx) + `[${chordText}]` + result.slice(idx);
         }
@@ -1781,7 +1790,14 @@ https://github.com/nodeca/pako/blob/main/LICENSE
             // Guarantee at least 1 whitespace between consecutive chords to prevent collision
             const targetCol = Math.max(c.charIndex + 1, chordLineStr.length + (chordLineStr.length > 1 ? 1 : 0));
             while (chordLineStr.length < targetCol) chordLineStr += ' ';
-            chordLineStr += (c.name || c.chord || '');
+            let cName = (c.name || c.chord || '').trim();
+            if (/[-—]/.test(cName)) {
+              const subparts = cName.split(/[-—]+/).map(p => p.trim()).filter(Boolean);
+              if (subparts.length > 1 && subparts.every(p => /^[A-H]/.test(p))) {
+                cName = subparts.join(' ');
+              }
+            }
+            chordLineStr += cName;
           }
 
           // Open Chords / OpenSong trailing overlap protection:
@@ -3903,6 +3919,22 @@ ${lyricsBody}
         while ((match = regex.exec(rawLine)) !== null) {
           lyric += rawLine.slice(lastEnd, match.index);
           const chordToken = match[1].trim();
+          if (/[-—]/.test(chordToken)) {
+            const subparts = chordToken.split(/[-—]+/).map(p => p.trim()).filter(Boolean);
+            if (subparts.length > 1 && subparts.every(p => /^[A-H]/.test(p))) {
+              subparts.forEach((sub, subIdx) => {
+                chords.push({
+                  name: sub,
+                  chord: sub,
+                  charIndex: lyric.length + (subIdx * 3),
+                  confidence: 1.0,
+                  manual: true
+                });
+              });
+              lastEnd = regex.lastIndex;
+              continue;
+            }
+          }
           chords.push({
             name: chordToken,
             chord: chordToken,

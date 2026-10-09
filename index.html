@@ -5304,7 +5304,17 @@ class SongParser {
       let lineToTokenize = rawLine.replace(/^[\t\u00a0 ]+/, '');
 
       // Разбиваем строку на части: (аккорд, слог текста)
-      const tokens = lineToTokenize.split(/(\[[^\]]+\])/);
+      // Разбиваем дефисные связки аккордов вроде [Dm-E] на отдельные аккорды [Dm] [E]
+      const normalizedLine = lineToTokenize.replace(/\[([^\]]+)\]/g, (m, chordContent) => {
+        if (/[-—]/.test(chordContent)) {
+          const parts = chordContent.split(/[-—]+/).map(p => p.trim()).filter(Boolean);
+          if (parts.length > 1 && parts.every(p => /^[A-H]/.test(p))) {
+            return parts.map(p => `[${p}]`).join(' ');
+          }
+        }
+        return m;
+      });
+      const tokens = normalizedLine.split(/(\[[^\]]+\])/);
       const units = [];
       let pendingChord = '';
 
