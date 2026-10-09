@@ -6600,6 +6600,7 @@ class AppController {
     this.setupKeyboardAndPedals();
     this.setupWakeLock();
     this.setupConcertTouchGestures();
+    this.setupSongDetailTouchGestures();
     this.setupHistoryBackNavigation();
 
     try {
@@ -6900,6 +6901,44 @@ class AppController {
           }
         }
       }
+      if (e.touches.length === 0) {
+        initialPinchDist = 0;
+      }
+    }, { passive: true });
+  }
+
+  setupSongDetailTouchGestures() {
+    let initialPinchDist = 0;
+    let initialFontSize = 1.0;
+
+    document.addEventListener('touchstart', (e) => {
+      const box = document.getElementById('lyrics-box');
+      if (!box || !box.contains(e.target)) return;
+      if (e.touches.length === 2) {
+        initialPinchDist = Math.hypot(
+          e.touches[0].clientX - e.touches[1].clientX,
+          e.touches[0].clientY - e.touches[1].clientY
+        );
+        const cur = parseFloat(box.style.getPropertyValue('--font-lyrics')) || store.getState().detailFontSize || 1.0;
+        initialFontSize = cur;
+      }
+    }, { passive: true });
+
+    document.addEventListener('touchmove', (e) => {
+      const box = document.getElementById('lyrics-box');
+      if (!box || initialPinchDist <= 0 || e.touches.length !== 2) return;
+      const currentDist = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      const scale = currentDist / initialPinchDist;
+      const newSize = parseFloat(Math.max(0.5, Math.min(3.0, initialFontSize * scale)).toFixed(2));
+      box.style.setProperty('--font-lyrics', newSize + 'rem');
+      box.style.setProperty('--font-chords', newSize + 'rem');
+      store.setState({ detailFontSize: newSize });
+    }, { passive: true });
+
+    document.addEventListener('touchend', (e) => {
       if (e.touches.length === 0) {
         initialPinchDist = 0;
       }
@@ -7345,7 +7384,8 @@ class AppController {
 
     // Рассчитываем размер шрифта так, чтобы самая широкая строка заполнила экран от края до края:
     // (Делитель уменьшен с 9.5 до 6.8, что даёт точное увеличение на +35-40% для полного заполнения)
-    const effectiveMaxLen = Math.max(12, maxLineLen);
+    // Самая широкая строка + 1 символ запаса
+    const effectiveMaxLen = Math.max(12, maxLineLen + 1);
     const charWidthPx = (availWidth - 20) / effectiveMaxLen;
     let initialFontSize = Math.min(2.20, Math.max(0.70, charWidthPx / 6.8));
 
@@ -7355,21 +7395,48 @@ class AppController {
     document.documentElement.style.setProperty('--font-concert', fontSize + 'rem');
     document.documentElement.style.setProperty('--concert-line-margin', lineMargin + 'rem');
 
-    // 2. ВЕРТИКАЛЬНАЯ АДАПТАЦИЯ:
-    // Если суммарная высота песни не помещается в экран, плавно уменьшаем
-    let attempts = 0;
-    while (bodyEl.scrollHeight > (availHeight + 2) && fontSize > 0.50 && attempts < 25) {
-      fontSize -= 0.03;
-      if (fontSize < 1.0) lineMargin = 0.03;
-      if (fontSize < 0.75) lineMargin = 0.015;
-      document.documentElement.style.setProperty('--font-concert', fontSize.toFixed(2) + 'rem');
-      document.documentElement.style.setProperty('--concert-line-margin', lineMargin + 'rem');
-      attempts++;
-    }
-
+    // Требование: главное чтобы влезала самая широкая строка + 1 символ, без сжатия по высоте!
     store.setState({ concertFontSize: fontSize });
   }
 
+
+  fitSongDetailToViewport() {
+    const box = document.getElementById('lyrics-box');
+    if (!box) return;
+    const availWidth = box.clientWidth || (window.innerWidth - 32);
+    if (availWidth <= 0) return;
+
+    const state = store.getState();
+    const song = state.songs.find(s => s.id === state.currentSongId);
+    if (!song) return;
+
+    let maxLineLen = 15;
+    const cpSource = song.chordpro || song.body_chordpro || '';
+    const cpLines = cpSource.split(/\r?\n/).filter(Boolean);
+    for (const line of cpLines) {
+      if (/^\s*\{[^\}]+\}\s*$/.test(line)) continue;
+      const textOnly = line.replace(/\[[^\]]+\]/g, '').trim();
+      const chordsOnly = (line.match(/\[[^\]]+\]/g) || []).map(c => c.slice(1, -1)).join(' ');
+      const effectiveLineLen = Math.max(textOnly.length, chordsOnly.length);
+      if (effectiveLineLen > maxLineLen) maxLineLen = effectiveLineLen;
+    }
+
+    const lyricsSource = song.lyrics || song.body_plain || '';
+    const lyrLines = lyricsSource.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    for (const line of lyrLines) {
+      if (line.length > maxLineLen) maxLineLen = line.length;
+    }
+
+    // Динамический подбор: самая широкая строка + 1 символ без ограничения по высоте
+    const effectiveMaxLen = Math.max(12, maxLineLen + 1);
+    const charWidthPx = (availWidth - 16) / effectiveMaxLen;
+    let computedRem = Math.min(1.80, Math.max(0.70, charWidthPx / 7.2));
+    let fontSize = parseFloat(computedRem.toFixed(2));
+
+    box.style.setProperty('--font-lyrics', fontSize + 'rem');
+    box.style.setProperty('--font-chords', fontSize + 'rem');
+    store.setState({ detailFontSize: fontSize });
+  }
 
 
   showConcertSettingsModal() {
@@ -10033,6 +10100,7 @@ async handleBatchAudioUpload(files) {
     const lyricsContainer = Renderer.createElement('div', { className: 'lyrics-container', id: 'lyrics-box' });
     Renderer.renderLyrics(lyricsContainer, song, this.currentSongTranspose);
     container.appendChild(lyricsContainer);
+    requestAnimationFrame(() => this.fitSongDetailToViewport());
 
     // 3. Метаданные и заметки (с выпадающим списком ролей)
     const detailsBox = Renderer.createElement('div', { className: 'song-details-bottom-box' });
@@ -10202,7 +10270,10 @@ async handleBatchAudioUpload(files) {
       lbl.textContent = song.key ? ChordTransposer.transposeChord(song.key, this.currentSongTranspose, state.notation === 'H') : currentTransVal;
     }
     const box = document.getElementById('lyrics-box');
-    if (box) Renderer.renderLyrics(box, song, this.currentSongTranspose);
+    if (box) {
+      Renderer.renderLyrics(box, song, this.currentSongTranspose);
+      requestAnimationFrame(() => this.fitSongDetailToViewport());
+    }
   }
 
   renderPlaylistsView(container, headerActions) {
@@ -11452,6 +11523,14 @@ function bootApp() {
   window._appBooted = true;
   window.appController = new AppController();
   window.appController.init();
+  window.addEventListener('resize', () => {
+    if (document.getElementById('concert-overlay')?.style.display !== 'none') {
+      window.appController.fitConcertSongToViewport();
+    }
+    if (document.getElementById('lyrics-box')) {
+      window.appController.fitSongDetailToViewport();
+    }
+  });
 }
 
 if (document.readyState === 'loading') {
