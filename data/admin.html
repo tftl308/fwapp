@@ -1343,15 +1343,19 @@ https://github.com/nodeca/pako/blob/main/LICENSE
         break;
       }
 
+      const splitHyphenChords = (str) => {
+        return str.replace(/([A-H][b#]?(?:m|maj|min|dim|aug|sus|add)?\d{0,2})[-—]+([A-H][b#]?)/g, ' ');
+      };
+
       if (hasChords && splitIdx !== -1) {
         let chordPart = lineRightTrimmed.slice(0, splitIdx);
         let textPart = lineRightTrimmed.slice(splitIdx);
-        let cleanChords = chordPart.replace(/\*\*/g, '').trim();
-        if (!textPart.trim()) return [`.${cleanChords}`];
-        return [`.${cleanChords}`, textPart];
+        let cleanChords = splitHyphenChords(chordPart.replace(/\*\*/g, '')).trim();
+        if (!textPart.trim()) return [];
+        return [, textPart];
       } else if (hasChords && splitIdx === -1) {
-        let cleanChords = lineRightTrimmed.replace(/\*\*/g, '').trim();
-        return [`.${cleanChords}`];
+        let cleanChords = splitHyphenChords(lineRightTrimmed.replace(/\*\*/g, '')).trim();
+        return [];
       } else {
         return [lineRightTrimmed];
       }

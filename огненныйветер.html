@@ -234,7 +234,7 @@
       padding: 0.5rem 0.75rem;
       min-height: 44px;
       outline: none;
-      font-size: 0.95rem;
+      font-size: 16px;
     }
 
     textarea.input-textarea {
@@ -246,7 +246,7 @@
       width: 100%;
       min-height: 70px;
       outline: none;
-      font-size: 0.95rem;
+      font-size: 16px; /* Предотвращает нежелательный зум и срыв фокуса на iOS/Android */
       resize: vertical;
       font-family: inherit;
       touch-action: auto !important;
@@ -263,7 +263,7 @@
       padding: 0.5rem 0.75rem;
       min-height: 44px;
       outline: none;
-      font-size: 0.95rem;
+      font-size: 16px; /* Предотвращает нежелательный зум и срыв фокуса на iOS/Android */
       width: 100%;
       touch-action: auto !important;
       user-select: text !important;
@@ -5997,15 +5997,39 @@ class AudioPlayerService {
     if (resolvedUrl.startsWith('blob:')) {
       this._lastBlobUrl = resolvedUrl;
     }
-    // Извлекаем вшитую обложку альбома из MP3 файла если доступен бинарный объект
+    // Извлекаем вшитую обложку альбома из MP3 файла (RAM, IndexedDB или через HTTP fetch)
     let coverUrl = track.coverUrl || '';
-    if (!coverUrl && fname) {
+    if (!coverUrl) {
       try {
-        let rawBlob = (window._audioFilesRegistry && window._audioFilesRegistry.get(fname)) || (await storage.getAudioBlob(fname));
+        let rawBlob = (fname && window._audioFilesRegistry && window._audioFilesRegistry.get(fname)) || (fname && await storage.getAudioBlob(fname));
+        if (!rawBlob) {
+          const fetchCandidates = [];
+          if (resolvedUrl) fetchCandidates.push(resolvedUrl);
+          if (fname) {
+            fetchCandidates.push('./music/' + encodeURIComponent(fname));
+            fetchCandidates.push('music/' + encodeURIComponent(fname));
+            fetchCandidates.push('./' + encodeURIComponent(fname));
+          }
+          for (const candUrl of fetchCandidates) {
+            try {
+              const hRes = await fetch(candUrl, { method: 'GET' });
+              if (hRes.ok) {
+                rawBlob = await hRes.blob();
+                break;
+              }
+            } catch(e) {}
+          }
+        }
         if (rawBlob) {
           coverUrl = await Id3ArtworkHelper.extractCoverFromBlob(rawBlob);
+          if (coverUrl) {
+            track.coverUrl = coverUrl;
+            AppLogger.info('PLAYER', 'Успешно извлечена обложка ID3 APIC для ' + fname);
+          }
         }
-      } catch(e) {}
+      } catch(e) {
+        AppLogger.warn('PLAYER', 'Ошибка извлечения ID3 обложки: ' + e.message);
+      }
     }
 
     this.currentTrack = Object.assign({}, track, { url: resolvedUrl, coverUrl: coverUrl || track.coverUrl || '' });
@@ -7400,7 +7424,7 @@ class AppController {
     store.setState({ concertFontSize: fontSize });
   }
 
-  fitSongDetailToViewport() {
+  fitSongDetailToViewport(isFromResize = false) {
     const box = document.getElementById('lyrics-box');
     if (!box) return;
     const availWidth = box.clientWidth || (window.innerWidth - 32);
@@ -7422,7 +7446,11 @@ class AppController {
 
     box.style.setProperty('--font-lyrics', fontSize + 'rem');
     box.style.setProperty('--font-chords', fontSize + 'rem');
-    store.setState({ detailFontSize: fontSize });
+    // Не вызываем store.setState({ detailFontSize: fontSize }) если это ресайз (например, открытие экранной клавиатуры),
+    // чтобы не провоцировать ре-рендер всего представления и потерю фокуса текстовых полей!
+    if (!isFromResize) {
+      store.state.detailFontSize = fontSize;
+    }
   }
 
   showConcertSettingsModal() {
@@ -10075,6 +10103,8 @@ async handleBatchAudioUpload(files) {
       placeholder: 'Заметка музыканта для роли ' + (MUSICIAN_PROFILES.find(p => p.id === effectiveProfile)?.label || effectiveProfile) + '...',
       rows: 2
     }, [currentNoteText]);
+    noteInput.addEventListener('touchstart', (e) => e.stopPropagation(), { passive: true });
+    noteInput.addEventListener('mousedown', (e) => e.stopPropagation());
     notesFields.appendChild(noteInput);
 
     // Дополнительные пользовательские поля и комментарии (user1, user2, user3)
@@ -10103,6 +10133,14 @@ async handleBatchAudioUpload(files) {
       placeholder: 'Метка / комментарий 3 (user3)',
       value: song.user3 || '',
       style: 'font-size: 0.82rem; padding: 0.35rem 0.5rem;'
+    });
+    [u1Input, u2Input, u3Input].forEach(inp => {
+      inp.addEventListener('touchstart', (e) => e.stopPropagation(), { passive: true });
+      inp.addEventListener('mousedown', (e) => e.stopPropagation());
+    });
+    [u1Input, u2Input, u3Input].forEach(inp => {
+      inp.addEventListener('touchstart', (e) => e.stopPropagation(), { passive: true });
+      inp.addEventListener('mousedown', (e) => e.stopPropagation());
     });
     userFieldsWrap.appendChild(u1Input);
     userFieldsWrap.appendChild(u2Input);
@@ -11416,8 +11454,12 @@ document.addEventListener('DOMContentLoaded', () => {
     if (document.getElementById('concert-overlay')?.style.display !== 'none') {
       window.appController.fitConcertSongToViewport();
     }
-    if (document.getElementById('lyrics-box')) {
-      window.appController.fitSongDetailToViewport();
+    // Внимание: при появлении виртуальной клавиатуры на мобильных устройствах не перезатираем
+    // фокус и не вызываем перерисовку деталей, если пользователь редактирует поле ввода
+    const activeEl = document.activeElement;
+    const isEditing = activeEl && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA');
+    if (document.getElementById('lyrics-box') && !isEditing) {
+      window.appController.fitSongDetailToViewport(true);
     }
   });
 });
