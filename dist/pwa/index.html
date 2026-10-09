@@ -6696,6 +6696,12 @@ class AppController {
     const savedNotation = await storage.getSetting('notation') || 'H';
     const savedProfile = await storage.getSetting('currentProfile') || 'none';
     const savedCurPlaylist = await storage.getSetting('currentPlaylistId') || 'pl-temp';
+    const savedAppFont = localStorage.getItem('ov_app_font_family');
+    if (savedAppFont) {
+      document.documentElement.style.setProperty('--font-family-lyrics', savedAppFont);
+      document.documentElement.style.setProperty('--font-family-chords', savedAppFont);
+      document.documentElement.style.setProperty('--font-family-app', savedAppFont);
+    }
     const savedConcertLenOffset = parseInt(localStorage.getItem('ov_concert_len_offset') || '0', 10);
     const savedConcertLetterSpacing = parseFloat(localStorage.getItem('ov_concert_letter_spacing') || '1.0');
     document.documentElement.style.setProperty('--concert-letter-spacing', (savedConcertLetterSpacing * 0.02).toFixed(3) + 'em');
@@ -6993,18 +6999,18 @@ class AppController {
 
   setupSongDetailTouchGestures() {
     let initialPinchDist = 0;
-    let initialZoom = 1.0;
+    let initialScale = 1.0;
+    let currentScale = 1.0;
 
     document.addEventListener('touchstart', (e) => {
       const box = document.getElementById('lyrics-box');
-      if (!box || !box.contains(e.target)) return;
+      if (!box) return;
       if (e.touches.length === 2) {
         initialPinchDist = Math.hypot(
           e.touches[0].clientX - e.touches[1].clientX,
           e.touches[0].clientY - e.touches[1].clientY
         );
-        const curZoom = parseFloat(box.style.zoom) || 1.0;
-        initialZoom = curZoom;
+        initialScale = currentScale;
       }
     }, { passive: true });
 
@@ -7015,9 +7021,11 @@ class AppController {
         e.touches[0].clientX - e.touches[1].clientX,
         e.touches[0].clientY - e.touches[1].clientY
       );
-      const scale = currentDist / initialPinchDist;
-      const newZoom = parseFloat(Math.max(0.6, Math.min(2.8, initialZoom * scale)).toFixed(2));
-      box.style.zoom = newZoom;
+      const ratio = currentDist / initialPinchDist;
+      currentScale = Math.max(0.65, Math.min(2.8, initialScale * ratio));
+      box.style.transformOrigin = 'top left';
+      box.style.transform = 'scale(' + currentScale.toFixed(2) + ')';
+      box.style.width = (100 / currentScale).toFixed(1) + '%';
     }, { passive: true });
 
     document.addEventListener('touchend', (e) => {
@@ -7120,6 +7128,15 @@ class AppController {
     });
 
     document.addEventListener('input', (e) => {
+      if (e.target.dataset && e.target.dataset.action === 'change-concert-letter-spacing') {
+        const val = parseFloat(e.target.value);
+        store.setState({ concertLetterSpacing: val });
+        localStorage.setItem('ov_concert_letter_spacing', String(val));
+        document.documentElement.style.setProperty('--concert-letter-spacing', (val * 0.02).toFixed(3) + 'em');
+        const lbl = document.getElementById('concert-spacing-val-label');
+        if (lbl) lbl.textContent = val.toFixed(1);
+        return;
+      }
       if (e.target.id === 'player-volume-slider') {
         audioPlayer.setVolume(parseFloat(e.target.value));
         return;
@@ -7316,6 +7333,10 @@ class AppController {
   }
 
     openConcertMode(playlistId, startIndex = 0) {
+    const savedOffset = parseInt(localStorage.getItem('ov_concert_len_offset') || '0', 10);
+    const savedSpacing = parseFloat(localStorage.getItem('ov_concert_letter_spacing') || '1.0');
+    store.setState({ concertLenOffset: savedOffset, concertLetterSpacing: savedSpacing });
+    document.documentElement.style.setProperty('--concert-letter-spacing', (savedSpacing * 0.02).toFixed(3) + 'em');
     audioPlayer.pause();
     const docked = document.getElementById('docked-player');
     if (docked) docked.style.display = 'none';
@@ -7346,6 +7367,10 @@ class AppController {
   }
 
   openConcertSingleSong(songId) {
+    const savedOffset = parseInt(localStorage.getItem('ov_concert_len_offset') || '0', 10);
+    const savedSpacing = parseFloat(localStorage.getItem('ov_concert_letter_spacing') || '1.0');
+    store.setState({ concertLenOffset: savedOffset, concertLetterSpacing: savedSpacing });
+    document.documentElement.style.setProperty('--concert-letter-spacing', (savedSpacing * 0.02).toFixed(3) + 'em');
     const state = store.getState();
     const targetId = songId || state.currentSongId;
     audioPlayer.pause();
@@ -10171,7 +10196,11 @@ async handleBatchAudioUpload(files) {
     const lyricsContainer = Renderer.createElement('div', { className: 'lyrics-container', id: 'lyrics-box' });
     Renderer.renderLyrics(lyricsContainer, song, this.currentSongTranspose);
     container.appendChild(lyricsContainer);
-    requestAnimationFrame(() => this.fitSongDetailToViewport());
+    requestAnimationFrame(() => {
+      this.fitSongDetailToViewport();
+      const b = document.getElementById('lyrics-box');
+      if (b) { b.style.transform = 'none'; b.style.width = '100%'; }
+    });
 
     // 3. Метаданные и заметки (с выпадающим списком ролей)
     const detailsBox = Renderer.createElement('div', { className: 'song-details-bottom-box' });
