@@ -5637,7 +5637,8 @@ class SearchEngine {
       const normId = s.id ? s.id.toLowerCase() : '';
       const numId = parseInt(s.id, 10).toString();
       const normTitle = normalizeSearchText(s.title);
-      const normAlt = normalizeSearchText(s.alt_title || '');
+      const normAlt = normalizeSearchText((s.alt_title || '') + ' ' + (s.theme || ''));
+      const normTags = normalizeSearchText((s.alttheme || '') + ' ' + (s.theme || ''));
       const normAuthor = normalizeSearchText(s.author || '');
       const normBody = normalizeSearchText(s.body_plain || '');
       const normKey = (s.key || '').trim().toLowerCase();
@@ -5648,13 +5649,14 @@ class SearchEngine {
         numId,
         normTitle,
         normAlt,
+        normTags,
         normAuthor,
         normBody,
         normKey,
         titleWords: normTitle.split(' ').filter(Boolean),
         altWords: normAlt.split(' ').filter(Boolean),
-        allWords: (normTitle + ' ' + normAlt + ' ' + normAuthor + ' ' + normBody).split(' ').filter(Boolean),
-        allText: [normId, numId, normTitle, normAlt, normAuthor, normBody].join(' ')
+        allWords: (normTitle + ' ' + normAlt + ' ' + normTags + ' ' + normAuthor + ' ' + normBody).split(' ').filter(Boolean),
+        allText: [normId, numId, normTitle, normAlt, normTags, normAuthor, normBody].join(' ')
       };
     });
   }
@@ -5678,6 +5680,7 @@ class SearchEngine {
     const terms = normalizedClean.split(' ').filter(Boolean);
 
     let candidates = this.docs;
+    if (filters.tag) candidates = candidates.filter(d => d.normTags.includes(filters.tag));
     if (filters.author) candidates = candidates.filter(d => d.normAuthor.includes(filters.author));
     if (filters.key) candidates = candidates.filter(d => d.normKey === filters.key);
 
@@ -9472,6 +9475,41 @@ async handleBatchAudioUpload(files) {
       }
     }, ['🎸 Только песни с аккордами']);
     quickFilters.appendChild(btnWithChords);
+
+    // Блок быстрых кнопок фильтрации по Тэгам (тэг1 .. тэг5)
+    const tagFilterWrap = Renderer.createElement('div', {
+      style: 'display: flex; flex-direction: column; gap: 0.35rem; margin-top: 0.5rem;'
+    });
+    tagFilterWrap.appendChild(Renderer.createElement('div', {
+      style: 'font-size: 0.78rem; font-weight: 800; text-transform: uppercase; color: var(--text-muted);'
+    }, ['🏷️ Быстрый фильтр по тэгам (тэг1..5):']));
+
+    const tagBtnsRow = Renderer.createElement('div', {
+      style: 'display: flex; flex-wrap: wrap; gap: 0.35rem;'
+    });
+
+    ['тэг1', 'тэг2', 'тэг3', 'тэг4', 'тэг5'].forEach(t => {
+      const tBtn = Renderer.createElement('button', {
+        className: 'btn btn-outline btn-sm',
+        style: 'font-size: 0.8rem; padding: 0.3rem 0.6rem; border-radius: 6px;',
+        onclick: async () => {
+          const allSongs = await storage.getAll('songs');
+          const tNorm = normalizeSearchText(t);
+          const filtered = allSongs.filter(s => {
+            const rawTags = normalizeSearchText((s.alttheme || '') + ' ' + (s.theme || ''));
+            return rawTags.includes(tNorm);
+          });
+          this.searchEngine = new SearchEngine(filtered);
+          store.setState({ songs: filtered });
+          overlay.remove();
+          this.updateCatalogResultsOnly();
+          AppController.showToast('Фильтр: ' + t + ' (' + filtered.length + ' песен)');
+        }
+      }, [t]);
+      tagBtnsRow.appendChild(tBtn);
+    });
+    tagFilterWrap.appendChild(tagBtnsRow);
+    quickFilters.appendChild(tagFilterWrap);
 
     tagGroup.appendChild(quickFilters);
     box.appendChild(tagGroup);
