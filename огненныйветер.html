@@ -5782,8 +5782,8 @@ class Id3ArtworkHelper {
   static async extractCoverFromBlob(blob) {
     if (!blob) return null;
     try {
-      // Читаем первые 3 МБ аудиофайла (обложки высокого разрешения могут занимать до 2-3 МБ)
-      const sliceSize = Math.min(blob.size, 3 * 1024 * 1024);
+      // Читаем первые 5 МБ аудиофайла (обложки высокого разрешения могут занимать до 2-4 МБ)
+      const sliceSize = Math.min(blob.size, 5 * 1024 * 1024);
       const slice = blob.slice(0, sliceSize);
       const buffer = await slice.arrayBuffer();
       const bytes = new Uint8Array(buffer);
@@ -5820,14 +5820,28 @@ class Id3ArtworkHelper {
           if (frameSize <= 0 || dataPos + frameSize > bytes.length) break;
 
           if (frameId === 'APIC' || frameId === 'PIC') {
-            // Ищем сигнатуру JPEG (FF D8 FF) или PNG (89 50 4E 47) внутри фрейма
-            for (let s = dataPos; s < dataPos + frameSize - 4; s++) {
+            // Ищем сигнатуру JPEG (FF D8 FF) или PNG (89 50 4E 47) внутри фрейма с точным определением конца изображения
+            for (let s = dataPos; s < dataPos + frameSize - 3; s++) {
               if (bytes[s] === 0xFF && bytes[s + 1] === 0xD8 && bytes[s + 2] === 0xFF) {
-                const imgData = bytes.subarray(s, dataPos + frameSize);
+                let end = dataPos + frameSize;
+                for (let e = dataPos + frameSize - 2; e >= s + 4; e--) {
+                  if (bytes[e] === 0xFF && bytes[e + 1] === 0xD9) {
+                    end = e + 2;
+                    break;
+                  }
+                }
+                const imgData = bytes.subarray(s, end);
                 return URL.createObjectURL(new Blob([imgData], { type: 'image/jpeg' }));
               }
               if (bytes[s] === 0x89 && bytes[s + 1] === 0x50 && bytes[s + 2] === 0x4E && bytes[s + 3] === 0x47) {
-                const imgData = bytes.subarray(s, dataPos + frameSize);
+                let end = dataPos + frameSize;
+                for (let e = dataPos + frameSize - 8; e >= s + 8; e--) {
+                  if (bytes[e] === 0x49 && bytes[e + 1] === 0x45 && bytes[e + 2] === 0x4E && bytes[e + 3] === 0x44) {
+                    end = e + 8;
+                    break;
+                  }
+                }
+                const imgData = bytes.subarray(s, end);
                 return URL.createObjectURL(new Blob([imgData], { type: 'image/png' }));
               }
             }
@@ -5837,19 +5851,18 @@ class Id3ArtworkHelper {
         }
       }
 
-      // Способ 2: Прямое сканирование бинарного потока на встроенное изображение JPEG или PNG в первых 3 МБ
-      for (let s = 10; s < bytes.length - 2048; s++) {
+      // Способ 2: Прямое сканирование бинарного потока на встроенное изображение JPEG или PNG в первых 5 МБ
+      for (let s = 0; s < bytes.length - 200; s++) {
         // Поиск JPEG сигнатуры
-        if (bytes[s] === 0xFF && bytes[s + 1] === 0xD8 && bytes[s + 2] === 0xFF && (bytes[s + 3] === 0xE0 || bytes[s + 3] === 0xE1 || bytes[s + 3] === 0xDB || bytes[s + 3] === 0xEE)) {
-          // Ищем конец JPEG (FF D9)
+        if (bytes[s] === 0xFF && bytes[s + 1] === 0xD8 && bytes[s + 2] === 0xFF) {
           let end = -1;
-          for (let e = s + 100; e < bytes.length - 1; e++) {
+          for (let e = bytes.length - 2; e >= s + 10; e--) {
             if (bytes[e] === 0xFF && bytes[e + 1] === 0xD9) {
               end = e + 2;
               break;
             }
           }
-          if (end !== -1 && (end - s) > 500) {
+          if (end !== -1 && (end - s) > 100) {
             const imgData = bytes.subarray(s, end);
             return URL.createObjectURL(new Blob([imgData], { type: 'image/jpeg' }));
           }
@@ -5857,13 +5870,13 @@ class Id3ArtworkHelper {
         // Поиск PNG сигнатуры
         if (bytes[s] === 0x89 && bytes[s + 1] === 0x50 && bytes[s + 2] === 0x4E && bytes[s + 3] === 0x47) {
           let end = -1;
-          for (let e = s + 8; e < bytes.length - 8; e++) {
+          for (let e = bytes.length - 8; e >= s + 8; e--) {
             if (bytes[e] === 0x49 && bytes[e + 1] === 0x45 && bytes[e + 2] === 0x4E && bytes[e + 3] === 0x44) { // IEND
               end = e + 8;
               break;
             }
           }
-          if (end !== -1 && (end - s) > 500) {
+          if (end !== -1 && (end - s) > 100) {
             const imgData = bytes.subarray(s, end);
             return URL.createObjectURL(new Blob([imgData], { type: 'image/png' }));
           }
