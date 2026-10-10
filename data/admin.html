@@ -5334,13 +5334,25 @@ document.getElementById('btn-execute-audio-rename')?.addEventListener('click', a
       try {
         const text = await file.text();
         let notesMap = {}; // songId -> notes string
+        let customFieldsMap = {}; // songId -> { user1, user2, user3 }
+        let customPlaylists = [];
+        let customPlaylistItems = [];
 
         if (file.name.endsWith('.json') || text.trim().startsWith('{')) {
           const parsed = JSON.parse(text);
           if (parsed.taggedSongNotes) {
             notesMap = parsed.taggedSongNotes;
-          } else if (typeof parsed === 'object') {
+          } else if (typeof parsed === 'object' && !parsed.songCustomFields) {
             notesMap = parsed;
+          }
+          if (parsed.songCustomFields && typeof parsed.songCustomFields === 'object') {
+            customFieldsMap = parsed.songCustomFields;
+          }
+          if (Array.isArray(parsed.customPlaylists)) {
+            customPlaylists = parsed.customPlaylists;
+          }
+          if (Array.isArray(parsed.playlistItems)) {
+            customPlaylistItems = parsed.playlistItems;
           }
         } else {
           // CSV format (id;notes or song_id;notes)
@@ -5349,35 +5361,104 @@ document.getElementById('btn-execute-audio-rename')?.addEventListener('click', a
             const sid = String(r.id || r.song_id || '').padStart(4, '0');
             const n = r.notes || r.note || r.user_note || '';
             if (sid && n) notesMap[sid] = n;
+            if (sid && (r.user1 || r.user2 || r.user3)) {
+              customFieldsMap[sid] = {
+                user1: r.user1 || '',
+                user2: r.user2 || '',
+                user3: r.user3 || ''
+              };
+            }
           });
         }
 
-        const keys = Object.keys(notesMap);
-        if (keys.length === 0) {
-          alert('В выбранном файле не найдены заметки песен.');
+        const noteKeys = Object.keys(notesMap);
+        const fieldKeys = Object.keys(customFieldsMap);
+        const allSongIds = Array.from(new Set([...noteKeys, ...fieldKeys]));
+
+        if (allSongIds.length === 0 && customPlaylists.length === 0) {
+          alert('В выбранном файле не найдены заметки, метки user1..3 или списки песен.');
           return;
         }
 
         createAutomatedTableBackup('songs', 'pre_notes_merge');
 
-        let updatedCount = 0;
-        keys.forEach(sid => {
+        let updatedNotesCount = 0;
+        let updatedFieldsCount = 0;
+
+        allSongIds.forEach(sid => {
           const normId = String(sid).padStart(4, '0');
           const song = dbSongs.find(s => s.id === normId || String(parseInt(s.id, 10)) === String(parseInt(sid, 10)));
           if (song) {
-            const incomingNotes = notesMap[sid];
-            // Объединяем заметку с существующей
-            if (!song.notes || !song.notes.trim()) {
-              song.notes = incomingNotes;
-            } else {
-              // Если уже есть заметка, аккуратно дополняем
-              if (!song.notes.includes(incomingNotes.trim())) {
-                song.notes = (song.notes.trim() + ' ' + incomingNotes.trim()).trim();
+            // 1. Слияние заметок и тэгов ролей [leader], [piano]...
+            if (notesMap[sid]) {
+              const incomingNotes = String(notesMap[sid]).trim();
+              if (!song.notes || !song.notes.trim()) {
+                song.notes = incomingNotes;
+              } else {
+                // Умное слияние по тэгам ролей
+                const roleRegex = /\[(leader|piano|bayan|electric|bass|drums)\]([^\[]*)/gi;
+                let match;
+                let hasRoleTags = false;
+                while ((match = roleRegex.exec(incomingNotes)) !== null) {
+                  hasRoleTags = true;
+                  const roleTag = match[1].toLowerCase();
+                  const roleVal = (match[2] || '').trim();
+                  if (roleVal) {
+                    const tagPattern = new RegExp('\\\\[' + roleTag + '\\\\]([^\\\\[]*)', 'i');
+                    if (tagPattern.test(song.notes)) {
+                      song.notes = song.notes.replace(tagPattern, '[' + roleTag + '] ' + roleVal);
+                    } else {
+                      song.notes = (song.notes.trim() + '\n[' + roleTag + '] ' + roleVal).trim();
+                    }
+                  }
+                }
+                if (!hasRoleTags) {
+                  if (!song.notes.includes(incomingNotes)) {
+                    song.notes = (song.notes.trim() + ' ' + incomingNotes).trim();
+                  }
+                }
               }
+              updatedNotesCount++;
             }
-            updatedCount++;
+
+            // 2. Слияние пользовательских полей user1, user2, user3
+            if (customFieldsMap[sid]) {
+              const cf = customFieldsMap[sid];
+              let fieldUpdated = false;
+              if (cf.user1 !== undefined && String(cf.user1).trim()) { song.user1 = String(cf.user1).trim(); fieldUpdated = true; }
+              if (cf.user2 !== undefined && String(cf.user2).trim()) { song.user2 = String(cf.user2).trim(); fieldUpdated = true; }
+              if (cf.user3 !== undefined && String(cf.user3).trim()) { song.user3 = String(cf.user3).trim(); fieldUpdated = true; }
+              if (fieldUpdated) updatedFieldsCount++;
+            }
           }
         });
+
+        // 3. Слияние импортированных плейлистов если есть
+        let importedPlaylistsCount = 0;
+        if (customPlaylists.length > 0 && dbTables.playlists) {
+          customPlaylists.forEach(pl => {
+            if (!pl || !pl.id) return;
+            const existingIdx = dbTables.playlists.findIndex(p => p.id === pl.id);
+            if (existingIdx !== -1) {
+              dbTables.playlists[existingIdx] = Object.assign({}, dbTables.playlists[existingIdx], pl);
+            } else {
+              dbTables.playlists.push(pl);
+            }
+            importedPlaylistsCount++;
+          });
+          localStorage.setItem('ov_admin_playlists_table', JSON.stringify(dbTables.playlists));
+        }
+
+        if (customPlaylistItems.length > 0 && dbTables.playlist_items) {
+          customPlaylistItems.forEach(item => {
+            if (!item || !item.playlist_id) return;
+            const exists = dbTables.playlist_items.some(it => it.playlist_id === item.playlist_id && String(it.song_id).padStart(4, '0') === String(item.song_id).padStart(4, '0'));
+            if (!exists) {
+              dbTables.playlist_items.push(item);
+            }
+          });
+          localStorage.setItem('ov_admin_playlist_items_table', JSON.stringify(dbTables.playlist_items));
+        }
 
         dbTables.songs = dbSongs;
         localStorage.setItem('ov_admin_songs', JSON.stringify(dbSongs));
@@ -5386,9 +5467,9 @@ document.getElementById('btn-execute-audio-rename')?.addEventListener('click', a
         renderCatalog();
         updateTableStatCounts();
 
-        const msg = `✓ Успешно объединено заметок для ${updatedCount} песен из ${keys.length} в файле! Общий songs.csv обновлен.`;
+        const msg = `✓ Успешно объединено: заметок для ${updatedNotesCount} песен, пользовательских меток (user1..3) для ${updatedFieldsCount} песен` + (importedPlaylistsCount ? `, списков: ${importedPlaylistsCount}` : '') + '! Общий каталог песен обновлен.';
         if (statusEl) statusEl.textContent = msg;
-        alert(msg + '\n\nТеперь можно нажать «📥 Скачать songs.csv», и в файле будут все новые заметки музыкантов.');
+        alert(msg + '\n\nТеперь можно нажать «📥 Скачать songs.csv», и в итоговом файле будут все новые заметки и метки музыкантов.');
       } catch (err) {
         alert('Ошибка при слиянии заметок: ' + err.message);
       }
