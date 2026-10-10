@@ -8504,6 +8504,82 @@ case 'clear-search': {
     AppController.showToast('Порядок списков обновлён!');
   }
 
+  updatePlaylistDropZoneOnly() {
+    const state = store.getState();
+    const rightListWrap = document.getElementById('playlist-drop-zone');
+    if (!rightListWrap) {
+      store.notify();
+      return;
+    }
+
+    const curPlaylist = (state.playlists && state.playlists.find(p => p.id === state.currentPlaylistId)) || (state.playlists && state.playlists[0]) || { id: 'pl-temp', title: 'Подбор' };
+    const curItems = (state.playlistItems || [])
+      .filter(it => it.playlist_id === (curPlaylist ? curPlaylist.id : 'pl-temp'))
+      .sort((a, b) => parseInt(a.order, 10) - parseInt(b.order, 10));
+
+    // Обновляем текст на мобильной кнопке переключения таба (Сетлист)
+    const btnTabSetlist = document.querySelector('[data-action="switch-catalog-mobile-tab"][data-subtab="setlist"]');
+    if (btnTabSetlist) {
+      btnTabSetlist.textContent = 'Список: ' + curPlaylist.title + ' (' + curItems.length + ')';
+    }
+
+    rightListWrap.innerHTML = '';
+    if (curItems.length === 0) {
+      rightListWrap.appendChild(Renderer.createElement('div', {
+        className: 'text-sm text-muted',
+        style: 'text-align: center; padding: 2.5rem 1rem;'
+      }, ['Список пуст. Нажимайте «+» у любой песни слева или перетаскивайте её сюда!']));
+    } else {
+      curItems.forEach((item, idx) => {
+        const song = state.songs.find(s => s.id === item.song_id);
+        const songTitle = song ? song.title : 'Песня #' + item.song_id;
+        const keyCapo = song ? Renderer.formatKeyCapo(song.key, song.capo) : '';
+
+        const itemRow = Renderer.createElement('div', {
+          className: 'playlist-item-row',
+          draggable: true,
+          dataset: { dragIndex: idx }
+        });
+
+        const orderSpan = Renderer.createElement('div', { className: 'playlist-item-order', title: 'Потяните для сортировки' }, [(idx + 1) + '.']);
+        itemRow.appendChild(orderSpan);
+
+        const infoWrap = Renderer.createElement('div', {
+          className: 'playlist-item-info',
+          dataset: { action: 'open-song', songId: item.song_id }
+        }, [
+          Renderer.createElement('div', { className: 'playlist-item-title' }, [songTitle]),
+          Renderer.createElement('div', { className: 'text-sm text-muted' }, [keyCapo || '—'])
+        ]);
+        itemRow.appendChild(infoWrap);
+
+        const actionsWrap = Renderer.createElement('div', { className: 'playlist-item-actions' }, [
+          Renderer.createElement('button', {
+            className: 'btn btn-sm btn-outline',
+            dataset: { action: 'move-item-up', itemIndex: idx },
+            disabled: idx === 0,
+            title: 'Вверх'
+          }, ['↑']),
+          Renderer.createElement('button', {
+            className: 'btn btn-sm btn-outline',
+            dataset: { action: 'move-item-down', itemIndex: idx },
+            disabled: idx === curItems.length - 1,
+            title: 'Вниз'
+          }, ['↓']),
+          Renderer.createElement('button', {
+            className: 'btn btn-sm btn-outline',
+            dataset: { action: 'remove-song-from-playlist', itemIndex: idx },
+            title: 'Удалить из списка',
+            style: 'color: #ef4444;'
+          }, ['✕'])
+        ]);
+        itemRow.appendChild(actionsWrap);
+
+        rightListWrap.appendChild(itemRow);
+      });
+    }
+  }
+
   async touchPlaylistTimestamp(playlistId) {
     const state = store.getState();
     const lists = [...state.playlists];
@@ -8888,6 +8964,7 @@ case 'clear-search': {
   async processProjectFolderFiles(fileList) {
     AppLogger.info('FOLDER_SYNC', 'Обработка выбранных файлов проекта (' + fileList.length + ' файлов)...');
     let foundSongsFile = null;
+    let foundAudioCsvFile = null;
     let foundMusicFiles = [];
 
     for (let i = 0; i < fileList.length; i++) {
@@ -8896,16 +8973,19 @@ case 'clear-search': {
       // Игнорируем внутренние системные папки .git, cache, node_modules для моментального сканирования
       if (relPath.includes('/.git/') || relPath.includes('/node_modules/') || relPath.includes('/.cache/')) continue;
 
-      if (f.name.toLowerCase() === 'songs.csv') {
+      const fNameLower = f.name.toLowerCase();
+      if (fNameLower === 'songs.csv') {
         foundSongsFile = f;
-      } else if (f.name.toLowerCase().endsWith('.mp3') || f.name.toLowerCase().endsWith('.m4a') || f.name.toLowerCase().endsWith('.wav')) {
+      } else if (fNameLower === 'audio.csv' || fNameLower === 'music.csv') {
+        foundAudioCsvFile = f;
+      } else if (fNameLower.endsWith('.mp3') || fNameLower.endsWith('.m4a') || fNameLower.endsWith('.wav')) {
         foundMusicFiles.push(f);
       }
     }
-    await this.applyProjectFolderUpdates(foundSongsFile, foundMusicFiles);
+    await this.applyProjectFolderUpdates(foundSongsFile, foundMusicFiles, foundAudioCsvFile);
   }
 
-  async applyProjectFolderUpdates(songsFile, musicFiles) {
+  async applyProjectFolderUpdates(songsFile, musicFiles, audioCsvFile = null) {
     let reportParts = [];
 
     // Предупреждение пользователю о фоновой обработке базы
@@ -8930,6 +9010,39 @@ case 'clear-search': {
         }
       } catch (err) {
         AppLogger.error('FOLDER_SYNC', 'Ошибка чтения songs.csv: ' + err.message);
+      }
+    }
+
+    if (audioCsvFile) {
+      try {
+        AppLogger.info('FOLDER_SYNC', 'Чтение таблицы сопоставления аудио ' + audioCsvFile.name + '...');
+        const aText = await audioCsvFile.text();
+        const aRecords = CsvHelper.parse(aText);
+        if (aRecords && aRecords.length > 0) {
+          const currentAudio = await storage.getAll('audio') || [];
+          const merged = [...currentAudio];
+          aRecords.forEach(rec => {
+            if (!rec.song_id && !rec.id) return;
+            const sId = String(rec.song_id || '').padStart(4, '0');
+            const fn = rec.filename || (rec.path ? rec.path.split('/').pop() : '');
+            const existingIdx = merged.findIndex(x => x.filename === fn || (x.song_id === sId && x.type === rec.type));
+            const trackObj = {
+              id: rec.id || ('aud-' + sId + '-' + (rec.type || 'запись')),
+              song_id: sId,
+              label: rec.label || rec.title || fn,
+              type: rec.type || 'альбом',
+              path: rec.path || ('music/' + fn),
+              filename: fn
+            };
+            if (existingIdx !== -1) merged[existingIdx] = Object.assign({}, merged[existingIdx], trackObj);
+            else merged.push(trackObj);
+          });
+          await storage.saveBatch('audio', merged);
+          store.setState({ audio: merged });
+          reportParts.push('Таблица аудио: ' + aRecords.length);
+        }
+      } catch (err) {
+        AppLogger.error('FOLDER_SYNC', 'Ошибка чтения audio.csv: ' + err.message);
       }
     }
 
@@ -9158,8 +9271,15 @@ async handleBatchAudioUpload(files) {
     const updated = [...otherItems, ...curItems];
 
     await storage.saveBatch('playlistItems', updated);
-    store.setState({ playlistItems: updated });
+    store.state.playlistItems = updated;
     await this.touchPlaylistTimestamp(effectivePlId);
+
+    // Если мы на вкладке каталога, точечно обновляем правую панель сетлиста и бейдж таба БЕЗ сброса скролла каталога
+    if (store.state.currentTab === 'catalog' && !store.state.currentSongId) {
+      this.updatePlaylistDropZoneOnly();
+    } else {
+      store.notify();
+    }
 
     const s = (state.songs || []).find(x => x.id === songId);
     AppController.showToast('✓ Добавлено: ' + (s ? s.title : '#' + songId));
@@ -9182,8 +9302,14 @@ async handleBatchAudioUpload(files) {
 
     const updated = [...otherItems, ...remainingInCur];
     await storage.saveBatch('playlistItems', updated);
-    store.setState({ playlistItems: updated });
+    store.state.playlistItems = updated;
     await this.touchPlaylistTimestamp(state.currentPlaylistId);
+
+    if (store.state.currentTab === 'catalog' && !store.state.currentSongId) {
+      this.updatePlaylistDropZoneOnly();
+    } else {
+      store.notify();
+    }
     AppController.showToast('Песня удалена из списка');
   }
 
@@ -9205,8 +9331,14 @@ async handleBatchAudioUpload(files) {
     const otherItems = state.playlistItems.filter(it => it.playlist_id !== state.currentPlaylistId);
     const updated = [...otherItems, ...curItems];
     await storage.saveBatch('playlistItems', updated);
-    store.setState({ playlistItems: updated });
+    store.state.playlistItems = updated;
     await this.touchPlaylistTimestamp(state.currentPlaylistId);
+
+    if (store.state.currentTab === 'catalog' && !store.state.currentSongId) {
+      this.updatePlaylistDropZoneOnly();
+    } else {
+      store.notify();
+    }
   }
 
 
