@@ -543,7 +543,7 @@
       justify-content: center;
     }
 
-    .song-list { display: flex; flex-direction: column; gap: 0.4rem; }
+    .song-list { display: flex; flex-direction: column; gap: 0.4rem; touch-action: pan-y; }
 
     .song-card {
       background: var(--bg-card);
@@ -689,8 +689,9 @@
       border: 1px solid var(--border-color);
       border-radius: 0.45rem;
       background: var(--bg-primary);
-      cursor: grab;
+      cursor: default;
       user-select: none;
+      touch-action: pan-y;
       transition: transform 0.1s, border-color 0.15s;
     }
 
@@ -728,7 +729,19 @@
     .playlist-item-actions {
       display: flex;
       align-items: center;
-      gap: 0.2rem;
+      gap: 0.35rem;
+      flex-shrink: 0;
+    }
+    .playlist-item-actions .btn {
+      min-width: 38px !important;
+      min-height: 38px !important;
+      font-size: 1.05rem !important;
+      font-weight: 800 !important;
+      padding: 0 !important;
+      display: inline-flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      touch-action: manipulation;
     }
 
     .playlist-card-row {
@@ -7179,7 +7192,7 @@ class AppController {
     window._swipeTriggered = false;
 
     document.addEventListener('touchstart', (e) => {
-      const card = e.target.closest('.song-card');
+      const card = e.target.closest('#catalog-song-list-wrap .song-card');
       if (card && !e.target.closest('button')) {
         touchStartX = e.touches[0].clientX;
         touchStartY = e.touches[0].clientY;
@@ -7196,15 +7209,15 @@ class AppController {
       const dx = e.touches[0].clientX - touchStartX;
       const dy = e.touches[0].clientY - touchStartY;
 
-      if (!isHorizontalSwipe && Math.abs(dy) > 25) {
-        // Вертикальная прокрутка списка
+      if (!isHorizontalSwipe && (Math.abs(dy) > 12 || Math.abs(dy) > Math.abs(dx))) {
+        // Вертикальная прокрутка страницы/списка имеет абсолютный приоритет
         swipedSongCard.style.transform = '';
         swipedSongCard.style.backgroundColor = '';
         swipedSongCard = null;
         return;
       }
 
-      if (dx > 15) {
+      if (dx > 25 && Math.abs(dx) > Math.abs(dy) * 1.5) {
         isHorizontalSwipe = true;
         swipedSongCard.style.transition = 'none';
         swipedSongCard.style.transform = 'translateX(' + Math.min(dx, 90) + 'px)';
@@ -10241,7 +10254,7 @@ async handleBatchAudioUpload(files) {
     leftCol.appendChild(searchWrap);
 
     const results = this.searchEngine ? this.searchEngine.search(state.searchQuery) : state.songs;
-    const listWrap = Renderer.createElement('div', { className: 'song-list', id: 'catalog-song-list-wrap', style: 'max-height: 65vh; overflow-y: auto;' });
+    const listWrap = Renderer.createElement('div', { className: 'song-list', id: 'catalog-song-list-wrap', style: 'flex: 1; -webkit-overflow-scrolling: touch;' });
     this.renderCatalogSongCards(listWrap, results, state);
     leftCol.appendChild(listWrap);
     splitLayout.appendChild(leftCol);
@@ -10321,7 +10334,7 @@ async handleBatchAudioUpload(files) {
     const rightListWrap = Renderer.createElement('div', {
       id: 'playlist-drop-zone',
       className: 'song-list playlist-drop-zone',
-      style: 'max-height: 55vh; overflow-y: auto;'
+      style: 'flex: 1; -webkit-overflow-scrolling: touch;'
     });
 
     if (curItems.length === 0) {
