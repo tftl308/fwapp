@@ -1737,6 +1737,9 @@
       <button class="btn btn-icon btn-outline" data-action="player-next-track" aria-label="Следующий">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"><polygon points="5 4 15 12 5 20 5 4"/><line x1="19" y1="5" x2="19" y2="19"/></svg>
       </button>
+      <button class="btn btn-icon btn-outline" data-action="player-share-current-song" aria-label="Поделиться песней" title="Поделиться песней">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+      </button>
     </div>
   </div>
 
@@ -8575,6 +8578,10 @@ case 'clear-search': {
         audioPlayer.playNext();
         break;
 
+      case 'player-share-current-song':
+        this.shareCurrentPlayerSong();
+        break;
+
       case 'player-prev-track':
         audioPlayer.playPrev();
         break;
@@ -8629,6 +8636,7 @@ case 'clear-search': {
       store.notify();
       return;
     }
+    const prevScroll = rightListWrap.scrollTop;
 
     const curPlaylist = (state.playlists && state.playlists.find(p => p.id === state.currentPlaylistId)) || (state.playlists && state.playlists[0]) || { id: 'pl-temp', title: 'Подбор' };
     const curItems = (state.playlistItems || [])
@@ -8696,6 +8704,9 @@ case 'clear-search': {
         rightListWrap.appendChild(itemRow);
       });
     }
+    if (prevScroll > 0) {
+      rightListWrap.scrollTop = prevScroll;
+    }
   }
 
   async touchPlaylistTimestamp(playlistId) {
@@ -8705,7 +8716,7 @@ case 'clear-search': {
     if (pl) {
       pl.updated_at = new Date().toISOString();
       await storage.saveBatch('playlists', lists);
-      store.setState({ playlists: lists });
+      store.state.playlists = lists;
     }
   }
 
@@ -9824,6 +9835,53 @@ async handleBatchAudioUpload(files) {
 
   sharePlaylist(playlistId) {
     this.showPlaylistExportModal(playlistId);
+  }
+
+  async shareCurrentPlayerSong() {
+    const state = store.getState();
+    const curTrack = audioPlayer.currentTrack || (audioPlayer.playlistQueue && audioPlayer.playlistQueue[audioPlayer.currentIndex >= 0 ? audioPlayer.currentIndex : 0]) || (state.audio && state.audio[0]);
+    if (!curTrack) {
+      AppController.showToast('Нет активного трека для отправки');
+      return;
+    }
+
+    const song = curTrack.song_id ? state.songs.find(s => s.id === curTrack.song_id) : null;
+    const title = song ? song.title : (curTrack.label || curTrack.filename || 'Песня');
+    const keyInfo = song ? ((song.key || song.key_default ? ' [Тональность: ' + (song.key || song.key_default) + ']' : '')) : '';
+
+    let shareText = 'Песня: «' + title + '»' + keyInfo + '\n';
+    if (song && song.body_plain) {
+      const excerpt = song.body_plain.slice(0, 300).trim();
+      shareText += '\n' + excerpt + (song.body_plain.length > 300 ? '...\n' : '\n');
+    }
+    shareText += '\nСборник «Огненный Ветер»: ' + window.location.href.split('#')[0];
+
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: title,
+          text: shareText,
+          url: window.location.href.split('#')[0]
+        });
+        AppController.showToast('✓ Отправлено через меню «Поделиться»');
+        return;
+      } catch (err) {
+        if (err.name === 'AbortError') return;
+        AppLogger.warn('SHARE', 'Штатный диалог share отклонён, используем копирование в буфер');
+      }
+    }
+
+    // Fallback: копируем в буфер обмена
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      try {
+        await navigator.clipboard.writeText(shareText);
+        AppController.showToast('✓ Текст песни скопирован в буфер для отправки в мессенджер!');
+      } catch (e) {
+        prompt('Скопируйте текст для отправки:', shareText);
+      }
+    } else {
+      prompt('Скопируйте текст для отправки:', shareText);
+    }
   }
 
   exportMusicianData() {
@@ -10971,6 +11029,32 @@ async handleBatchAudioUpload(files) {
       ])
     ]);
     controls.appendChild(nextBtn);
+
+    // Кнопка поделиться треком/песней (штатное системное меню телефона)
+    const shareBtn = Renderer.createElement('button', {
+      className: 'player-btn-action',
+      dataset: { action: 'player-share-current-song' },
+      title: 'Поделиться песней (в мессенджеры)'
+    }, [
+      Renderer.createElement('svg', {
+        viewBox: '0 0 24 24',
+        width: '24',
+        height: '24',
+        fill: 'none',
+        stroke: 'currentColor',
+        'stroke-width': '2.2',
+        'stroke-linecap': 'round',
+        'stroke-linejoin': 'round'
+      }, [
+        Renderer.createElement('circle', { cx: '18', cy: '5', r: '3' }),
+        Renderer.createElement('circle', { cx: '6', cy: '12', r: '3' }),
+        Renderer.createElement('circle', { cx: '18', cy: '19', r: '3' }),
+        Renderer.createElement('line', { x1: '8.59', y1: '13.51', x2: '15.42', y2: '17.49' }),
+        Renderer.createElement('line', { x1: '15.41', y1: '6.51', x2: '8.59', y2: '10.49' })
+      ])
+    ]);
+    controls.appendChild(shareBtn);
+
     leftCard.appendChild(controls);
 
     // Ползунок громкости
