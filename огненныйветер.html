@@ -7824,9 +7824,15 @@ async setupWakeLock() {
         break;
       }
 
-      case 'go-back':
+      case 'go-back': {
         store.setState({ currentSongId: null });
+        if (typeof window._savedPageScrollY === 'number') {
+          requestAnimationFrame(() => {
+            window.scrollTo({ top: window._savedPageScrollY, behavior: 'instant' });
+          });
+        }
         break;
+      }
 
       case 'toggle-catalog-sort-filter': {
         this.showCatalogSortFilterModal();
@@ -7880,6 +7886,7 @@ async setupWakeLock() {
       case 'open-song': {
         // Если только что был выполнен свайп вправо, не открываем экран песни
         if (this.swipeTriggered || window._swipeTriggered) break;
+        window._savedPageScrollY = window.scrollY || window.pageYOffset || 0;
         const songId = el.dataset.songId;
         this.currentSongTranspose = 0;
         store.setState({ currentSongId: songId });
@@ -8258,6 +8265,10 @@ case 'clear-search': {
         const targetPlId = state.currentPlaylistId || 'pl-temp';
         if (targetSongId) {
           this.addSongToPlaylist(targetSongId, targetPlId);
+          // Визуальная подсветка нажатой кнопки плюсика
+          el.style.transform = 'scale(1.25)';
+          el.style.transition = 'transform 0.15s ease';
+          setTimeout(() => { el.style.transform = ''; }, 180);
         }
         break;
       }
@@ -9278,7 +9289,8 @@ async handleBatchAudioUpload(files) {
     }
 
     const s = (state.songs || []).find(x => x.id === songId);
-    AppController.showToast('✓ Добавлено: ' + (s ? s.title : '#' + songId));
+    const toastTitle = s ? s.title : ('Песня #' + songId);
+    AppController.showToast('✓ Добавлено в список: «' + toastTitle + '»');
   }
 
   async removePlaylistItem(itemIndex) {
@@ -9704,41 +9716,94 @@ async handleBatchAudioUpload(files) {
     }
 
     const song = curTrack.song_id ? state.songs.find(s => s.id === curTrack.song_id) : null;
-    const title = song ? song.title : (curTrack.label || curTrack.filename || 'Песня');
-    const keyInfo = song ? ((song.key || song.key_default ? ' [Тональность: ' + (song.key || song.key_default) + ']' : '')) : '';
+    const songTitle = song ? song.title : (curTrack.label || curTrack.filename || 'Песня');
+    const shortText = 'группа Огненный ветер - ' + songTitle;
+    const fname = curTrack.filename || (curTrack.path ? curTrack.path.split('/').pop() : (songTitle + '.mp3'));
 
-    let shareText = 'Песня: «' + title + '»' + keyInfo + '\n';
-    if (song && song.body_plain) {
-      const excerpt = song.body_plain.slice(0, 300).trim();
-      shareText += '\n' + excerpt + (song.body_plain.length > 300 ? '...\n' : '\n');
+    AppController.showToast('Подготовка аудиофайла для отправки...');
+
+    // 1. Получаем бинарный blob аудиофайла (из памяти, IndexedDB или сети)
+    let audioBlob = null;
+    try {
+      if (window._audioFilesRegistry && window._audioFilesRegistry.has(fname)) {
+        audioBlob = window._audioFilesRegistry.get(fname);
+      }
+      if (!audioBlob && fname) {
+        audioBlob = await storage.getAudioBlob(fname);
+      }
+      if (!audioBlob && curTrack.url && curTrack.url.startsWith('blob:')) {
+        const bRes = await fetch(curTrack.url);
+        if (bRes.ok) audioBlob = await bRes.blob();
+      }
+      if (!audioBlob) {
+        const fetchCands = [
+          curTrack.url,
+          './music/' + encodeURIComponent(fname),
+          'music/' + encodeURIComponent(fname),
+          './' + encodeURIComponent(fname)
+        ];
+        for (const cand of fetchCands) {
+          if (!cand) continue;
+          try {
+            const hRes = await fetch(cand);
+            if (hRes.ok) {
+              audioBlob = await hRes.blob();
+              break;
+            }
+          } catch(e) {}
+        }
+      }
+    } catch(err) {
+      console.warn('Audio blob fetch for share error:', err);
     }
-    shareText += '\nСборник «Огненный Ветер»: ' + window.location.href.split('#')[0];
 
+    // 2. Если есть File/Blob и браузер поддерживает navigator.share с файлами (Web Share API Level 2)
+    if (audioBlob && typeof File !== 'undefined' && navigator.share) {
+      try {
+        const cleanFname = fname.endsWith('.mp3') ? fname : (fname + '.mp3');
+        const fileObj = audioBlob instanceof File ? audioBlob : new File([audioBlob], cleanFname, { type: audioBlob.type || 'audio/mpeg' });
+        
+        if (navigator.canShare && navigator.canShare({ files: [fileObj] })) {
+          await navigator.share({
+            title: shortText,
+            text: shortText,
+            files: [fileObj]
+          });
+          AppController.showToast('✓ Аудиофайл отправлен!');
+          return;
+        }
+      } catch(err) {
+        if (err.name === 'AbortError') return;
+        AppLogger.warn('SHARE', 'Отправка файла через share отклонена: ' + err.message);
+      }
+    }
+
+    // 3. Если отправка файла не поддерживается или не удалась: пробуем штатный navigator.share с текстом
     if (navigator.share) {
       try {
         await navigator.share({
-          title: title,
-          text: shareText,
-          url: window.location.href.split('#')[0]
+          title: shortText,
+          text: shortText,
+          url: curTrack.url && !curTrack.url.startsWith('blob:') ? curTrack.url : window.location.href.split('#')[0]
         });
         AppController.showToast('✓ Отправлено через меню «Поделиться»');
         return;
-      } catch (err) {
+      } catch(err) {
         if (err.name === 'AbortError') return;
-        AppLogger.warn('SHARE', 'Штатный диалог share отклонён, используем копирование в буфер');
       }
     }
 
-    // Fallback: копируем в буфер обмена
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      try {
-        await navigator.clipboard.writeText(shareText);
-        AppController.showToast('✓ Текст песни скопирован в буфер для отправки в мессенджер!');
-      } catch (e) {
-        prompt('Скопируйте текст для отправки:', shareText);
-      }
+    // 4. Фолбэк: скачивание файла или копирование текста
+    if (audioBlob) {
+      this.downloadFile(audioBlob, fname, 'audio/mpeg');
+      AppController.showToast('Файл скачан для отправки: ' + shortText);
     } else {
-      prompt('Скопируйте текст для отправки:', shareText);
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(shortText);
+        AppController.showToast('✓ Скопировано: «' + shortText + '»');
+      } else {
+        prompt('Скопируйте:', shortText);
+      }
     }
   }
 
