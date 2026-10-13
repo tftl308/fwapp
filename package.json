@@ -6,7 +6,6 @@
   "scripts": {
     "build:data": "node tools/build-data.mjs",
     "build:pwa": "node tools/build-pwa.mjs",
-    "build:capacitor": "node tools/build-capacitor.mjs",
     "build": "npm run build:data && node tools/build-index.mjs && npm run build:reader && npm run build:pwa && npm run build:capacitor",
     "dev:server": "python3 start_offline_server.py --serve-files",
     "test": "node --test tests/*.mjs",
