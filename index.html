@@ -6884,12 +6884,10 @@ class AppController {
     let songTags = await storage.getAll('songTags');
     let audio = await storage.getAll('audio');
 
-    // Если в базе сохранены аудиозаписи с обложками по умолчанию, подтягиваем обложки
+    // Восстанавливаем сохраненные аудиозаписи и привязки
     if (audio && audio.length > 0) {
       audio = audio.map(a => {
-        if (!a.coverUrl && typeof DEFAULT_ALBUM_COVER_BASE64 !== 'undefined') {
-          return Object.assign({}, a, { coverUrl: DEFAULT_ALBUM_COVER_BASE64 });
-        }
+        // Оставляем валидную извлеченную обложку, не затирая её заглушкой
         return a;
       });
     }
@@ -11143,8 +11141,29 @@ async handleBatchAudioUpload(files) {
     const studioLayout = Renderer.createElement('div', { className: 'player-studio-layout' });
 
     const leftCard = Renderer.createElement('div', { className: 'player-now-playing-card' });
-    const curTrack = audioPlayer.currentTrack || (audioPlayer.playlistQueue && audioPlayer.playlistQueue[audioPlayer.currentIndex >= 0 ? audioPlayer.currentIndex : 0]) || (state.audio && state.audio[0]);
+    // Всегда отдаем наивысший приоритет актуальному воспроизводимому треку (audioPlayer.currentTrack или state.activeAudio)
+    const activeTrack = audioPlayer.currentTrack || state.activeAudio;
+    let curTrack = activeTrack;
+    if (!curTrack && audioPlayer.playlistQueue && audioPlayer.playlistQueue.length > 0) {
+      curTrack = audioPlayer.playlistQueue[audioPlayer.currentIndex >= 0 ? audioPlayer.currentIndex : 0];
+    }
+    if (!curTrack && state.audio && state.audio.length > 0) {
+      curTrack = state.audio[0];
+    }
+
+    // Если у curTrack ещё нет coverUrl или стоит дефолтная, проверяем активный трек или кэш state.audio
+    if (curTrack) {
+      const cached = state.audio && state.audio.find(a => (a.id === curTrack.id) || (curTrack.filename && a.filename === curTrack.filename));
+      if (cached && cached.coverUrl && !cached.coverUrl.startsWith('data:image/svg')) {
+        curTrack.coverUrl = cached.coverUrl;
+      }
+    }
+
     const parentSong = curTrack ? state.songs.find(s => s.id === curTrack.song_id) : null;
+
+    const effectiveCover = (curTrack && curTrack.coverUrl && !curTrack.coverUrl.startsWith('data:image/svg')) 
+      ? curTrack.coverUrl 
+      : ((activeTrack && activeTrack.coverUrl && !activeTrack.coverUrl.startsWith('data:image/svg')) ? activeTrack.coverUrl : (typeof DEFAULT_ALBUM_COVER_BASE64 !== 'undefined' ? DEFAULT_ALBUM_COVER_BASE64 : ''));
 
     const cover = Renderer.createElement('div', {
       className: 'player-album-cover',
@@ -11152,11 +11171,55 @@ async handleBatchAudioUpload(files) {
     });
     const coverImg = Renderer.createElement('img', {
       id: 'player-dedicated-cover-img',
-      src: (curTrack && curTrack.coverUrl) ? curTrack.coverUrl : DEFAULT_ALBUM_COVER_BASE64,
+      src: effectiveCover,
       alt: 'Обложка трека',
       style: 'width: 100%; height: 100%; object-fit: contain; border-radius: 0.6rem;'
     });
     cover.appendChild(coverImg);
+
+    // Асинхронная гарантированная догрузка обложки в студийный плеер, если обложка еще не извлечена
+    if (curTrack && (!curTrack.coverUrl || curTrack.coverUrl === DEFAULT_ALBUM_COVER_BASE64)) {
+      const curFname = curTrack.filename || (curTrack.path ? curTrack.path.split('/').pop() : '');
+      (async () => {
+        try {
+          let b = (curFname && window._audioFilesRegistry && window._audioFilesRegistry.get(curFname)) || (curFname && await storage.getAudioBlob(curFname));
+          if (!b) {
+            const candList = [];
+            if (curTrack.url) candList.push(curTrack.url);
+            if (curFname) {
+              candList.push('music/' + curFname);
+              candList.push('./music/' + curFname);
+              candList.push('music/' + encodeURIComponent(curFname));
+              candList.push('./music/' + encodeURIComponent(curFname));
+            }
+            for (const u of candList) {
+              try {
+                const r = await fetch(u);
+                if (r.ok) { b = await r.blob(); break; }
+              } catch(e) {}
+            }
+          }
+          if (b) {
+            const extracted = await Id3ArtworkHelper.extractCoverFromBlob(b);
+            if (extracted) {
+              curTrack.coverUrl = extracted;
+              if (activeTrack && (activeTrack.id === curTrack.id || activeTrack.filename === curTrack.filename)) {
+                activeTrack.coverUrl = extracted;
+              }
+              const pImg = document.getElementById('player-dedicated-cover-img');
+              if (pImg) pImg.src = extracted;
+              const dImg = document.getElementById('docked-cover-img');
+              if (dImg) {
+                dImg.src = extracted;
+                dImg.style.display = 'block';
+                const dPh = document.getElementById('docked-cover-placeholder');
+                if (dPh) dPh.style.display = 'none';
+              }
+            }
+          }
+        } catch(e) {}
+      })();
+    }
 
     if (curTrack) {
       const normType = Renderer.normalizeAudioType(curTrack.type);
