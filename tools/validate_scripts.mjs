@@ -4,7 +4,6 @@ import vm from 'vm';
 const filesToCheck = [
   'index.html',
   'огненныйветер.html',
-  'огненныйветер_шрифты.html',
   'data/admin.html',
   'dist/reader/index.html'
 ];

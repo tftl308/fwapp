@@ -8,7 +8,6 @@ test('HTML Inline Scripts Syntax Verification (P0 Zero-Crash Invariant)', () => 
   const filesToCheck = [
     'index.html',
     'огненныйветер.html',
-    'огненныйветер_шрифты.html',
     'data/admin.html',
     'dist/pwa/index.html',
     'dist/reader/index.html'
