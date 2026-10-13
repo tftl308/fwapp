@@ -7105,8 +7105,8 @@ class AppController {
     let initialPinchDist = 0;
     let initialZoom = 1.0;
 
-    document.addEventListener(touchstart, (e) => {
-      const box = document.getElementById(lyrics-box);
+    document.addEventListener('touchstart', (e) => {
+      const box = document.getElementById('lyrics-box');
       if (!box || !box.contains(e.target)) return;
       if (e.touches.length === 2) {
         initialPinchDist = Math.hypot(
@@ -7118,8 +7118,8 @@ class AppController {
       }
     }, { passive: true });
 
-    document.addEventListener(touchmove, (e) => {
-      const box = document.getElementById(lyrics-box);
+    document.addEventListener('touchmove', (e) => {
+      const box = document.getElementById('lyrics-box');
       if (!box || initialPinchDist <= 0 || e.touches.length !== 2) return;
       const currentDist = Math.hypot(
         e.touches[0].clientX - e.touches[1].clientX,
@@ -7130,7 +7130,7 @@ class AppController {
       box.style.zoom = newZoom;
     }, { passive: true });
 
-    document.addEventListener(touchend, (e) => {
+    document.addEventListener('touchend', (e) => {
       if (e.touches.length === 0) {
         initialPinchDist = 0;
       }
