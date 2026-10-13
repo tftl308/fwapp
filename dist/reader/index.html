@@ -6982,7 +6982,39 @@ class AppController {
   }
 
   setupSongDetailTouchGestures() {
-    // Естественный системный Pinch-to-Zoom поддерживается браузером и PWA через touch-action и viewport
+    let initialPinchDist = 0;
+    let initialZoom = 1.0;
+
+    document.addEventListener(touchstart, (e) => {
+      const box = document.getElementById(lyrics-box);
+      if (!box || !box.contains(e.target)) return;
+      if (e.touches.length === 2) {
+        initialPinchDist = Math.hypot(
+          e.touches[0].clientX - e.touches[1].clientX,
+          e.touches[0].clientY - e.touches[1].clientY
+        );
+        const curZoom = parseFloat(box.style.zoom) || 1.0;
+        initialZoom = curZoom;
+      }
+    }, { passive: true });
+
+    document.addEventListener(touchmove, (e) => {
+      const box = document.getElementById(lyrics-box);
+      if (!box || initialPinchDist <= 0 || e.touches.length !== 2) return;
+      const currentDist = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      const scale = currentDist / initialPinchDist;
+      const newZoom = parseFloat(Math.max(0.6, Math.min(2.8, initialZoom * scale)).toFixed(2));
+      box.style.zoom = newZoom;
+    }, { passive: true });
+
+    document.addEventListener(touchend, (e) => {
+      if (e.touches.length === 0) {
+        initialPinchDist = 0;
+      }
+    }, { passive: true });
   }
 
   setupDelegatedEvents() {
@@ -9574,8 +9606,8 @@ async handleBatchAudioUpload(files) {
         const tagNormList = Array.from(selectedTags).map(t => normalizeSearchText(t));
         const filtered = allSongs.filter(s => {
           const rawTags = normalizeSearchText((s.alttheme || '') + ' ' + (s.theme || ''));
-          // Фильтруем песни, содержащие любой из выбранных тэгов
-          return tagNormList.some(tNorm => rawTags.includes(tNorm));
+          // Фильтруем песни, строго содержащие ВСЕ выбранные тэги (логическое И)
+          return tagNormList.every(tNorm => rawTags.includes(tNorm));
         });
         this.searchEngine = new SearchEngine(filtered);
         store.setState({ songs: filtered });
