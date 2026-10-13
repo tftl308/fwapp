@@ -5363,6 +5363,136 @@ class SongParser {
     return parsedLines;
   }
 
+  // Пропорциональная ширина символов для шрифта PT Serif (в относительных единицах em)
+  static getPtSerifCharWidthRel(char) {
+    if (char === ' ' || char === '\u00a0') return 0.28;
+    if (/^[ijl.,;:!\x27\`\|]$/.test(char)) return 0.28;
+    if (/^[frtI]$/.test(char)) return 0.35;
+    if (/^[abcdeghknopqsuvxyz]$/.test(char)) return 0.50;
+    if (/^[mw]$/.test(char)) return 0.75;
+    if (/^[ABCDEFGHJKLMNOPQRSTUVXYZ]$/.test(char)) return 0.68;
+    if (/^[MW]$/.test(char)) return 0.88;
+    if (/^[гт]$/.test(char)) return 0.38;
+    if (/^[абвдеёжзийклмнопрстуфхцчшщъыьэюя]$/.test(char)) {
+      if (/^[жшщыю]$/.test(char)) return 0.78;
+      if (/^[ф]$/.test(char)) return 0.70;
+      if (/^[гт]$/.test(char)) return 0.38;
+      return 0.52;
+    }
+    if (/^[АБВГДЕЁЖЗИЙКЛМНОПРСТУФХЦЧШЩЪЫЬЭЮЯ]$/.test(char)) {
+      if (/^[Г]$/.test(char)) return 0.45;
+      if (/^[ЖШЩЫЮФ]$/.test(char)) return 0.85;
+      return 0.72;
+    }
+    if (/^[0-9]$/.test(char)) return 0.52;
+    return 0.55;
+  }
+
+  static calcPtSerifTextUnits(str) {
+    if (!str) return 0;
+    let w = 0;
+    for (let i = 0; i < str.length; i++) {
+      w += SongParser.getPtSerifCharWidthRel(str[i]);
+    }
+    return w;
+  }
+
+  // Расчёт метрик песни для точной адаптации в PT Serif по ширине и высоте
+  static calcSongPtSerifMetrics(song) {
+    if (!song) return { maxUnitsWidth: 15, totalLinesHeight: 12 };
+    const cpSource = song.chordpro || song.body_chordpro || '';
+    const cpLines = cpSource.split(/\r?\n/).filter(Boolean);
+    let maxUnitsWidth = 10;
+    let totalLinesHeight = 0;
+    let isChorus = false;
+
+    for (const rawLine of cpLines) {
+      const trimmed = rawLine.trim();
+      if (!trimmed || /^\{[^\}]+\}$/.test(trimmed)) continue;
+      if (/^\[?(?:C\d*|ПРИПЕВ|ПР\.)\]?$/i.test(trimmed)) {
+        isChorus = true;
+        totalLinesHeight += 0.8;
+        continue;
+      }
+      if (/^\[?(?:B\d*|БРИДЖ|БР\.)\]?$/i.test(trimmed)) {
+        isChorus = true;
+        totalLinesHeight += 0.8;
+        continue;
+      }
+      if (/^\[?V\d+\]?$/i.test(trimmed) || /^КУПЛЕТ/i.test(trimmed)) {
+        isChorus = false;
+        totalLinesHeight += 0.8;
+        continue;
+      }
+
+      const lineToTokenize = rawLine.replace(/^[\t\u00a0 ]+/, '');
+      const tokens = lineToTokenize.split(/(\[[^\]]+\])/);
+      const units = [];
+      let pendingChord = '';
+
+      for (const tok of tokens) {
+        if (!tok) continue;
+        if (tok.startsWith('[') && tok.endsWith(']')) {
+          pendingChord = tok.slice(1, -1);
+        } else {
+          units.push({ chord: pendingChord, text: tok });
+          pendingChord = '';
+        }
+      }
+      if (pendingChord) units.push({ chord: pendingChord, text: ' ' });
+
+      let lineW = 0;
+      let hasCh = false;
+      for (const u of units) {
+        let cW = 0;
+        if (u.chord) {
+          hasCh = true;
+          cW = SongParser.calcPtSerifTextUnits(u.chord) * 1.08 + 0.45;
+        }
+        let tW = SongParser.calcPtSerifTextUnits(u.text);
+        lineW += Math.max(tW, cW);
+      }
+      if (isChorus) lineW += 0.56;
+      if (lineW > maxUnitsWidth) maxUnitsWidth = lineW;
+      totalLinesHeight += hasCh ? 1.6 : 1.0;
+    }
+
+    const lyrSource = song.lyrics || song.body_plain || '';
+    const lyrLines = lyrSource.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    for (const l of lyrLines) {
+      const w = SongParser.calcPtSerifTextUnits(l);
+      if (w > maxUnitsWidth) maxUnitsWidth = w;
+    }
+    if (totalLinesHeight === 0) totalLinesHeight = Math.max(8, lyrLines.length);
+
+    return {
+      maxUnitsWidth: parseFloat(maxUnitsWidth.toFixed(2)),
+      totalLinesHeight: parseFloat(totalLinesHeight.toFixed(1))
+    };
+  }
+
+  // Расчёт эффективного размера шрифта (rem), чтобы песня максимально заполняла экран
+  // и по ширине самых длинных строк, и по высоте контента без лишней прокрутки
+  static computeConcertEffectiveFontSize(song, availWidth, availHeight) {
+    if (!song || availWidth <= 0) return 1.4;
+    const metrics = SongParser.calcSongPtSerifMetrics(song);
+
+    // Ограничение по ширине: самая широкая строка должна комфортно помещаться в экран
+    // В 1rem = 16px. Длина строки в пикселях: metrics.maxUnitsWidth * (fontSizeRem * 16)
+    const effectiveUnits = Math.max(8, metrics.maxUnitsWidth + 0.5);
+    const widthFontRem = (availWidth - 24) / (effectiveUnits * 16);
+
+    // Ограничение по высоте: если песня компактная, стремимся уместить её на экране
+    let heightFontRem = 2.5;
+    if (availHeight > 220 && metrics.totalLinesHeight > 0) {
+      heightFontRem = (availHeight - 36) / (metrics.totalLinesHeight * 1.34 * 16);
+    }
+
+    let result = Math.min(widthFontRem, Math.max(0.70, heightFontRem));
+    result = Math.max(0.65, Math.min(2.50, result));
+    return parseFloat(result.toFixed(2));
+  }
+
   static calcSongVisualMaxLen(song) {
     if (!song) return 15;
     const cpSource = song.chordpro || song.body_chordpro || '';
@@ -6808,6 +6938,11 @@ class AppController {
       console.error('Storage init fallback:', err);
     }
 
+    // Фоновый предпросчет эффективного размера шрифта песен для экрана устройства
+    setTimeout(() => {
+      this.precalculateDeviceConcertFonts(store.getState().songs);
+    }, 600);
+
     // Фоновая проверка обновлений с GitHub Pages
     setTimeout(() => UpdateEngine.checkForUpdates(false), 1500);
 
@@ -6929,6 +7064,12 @@ class AppController {
           }));
           await storage.saveBatch('songs', songs);
           AppLogger.info('BOOT', 'Каталог успешно развернут: ' + songs.length + ' песен.');
+          // Фоновый предпросчет эффективных размеров шрифта под экран текущего устройства
+          setTimeout(() => {
+            if (window.appController && window.appController.precalculateDeviceConcertFonts) {
+              window.appController.precalculateDeviceConcertFonts(songs);
+            }
+          }, 500);
         } catch(err) {
           AppLogger.error('BOOT', 'Ошибка развертывания встроенного каталога: ' + err.message);
         }
@@ -7107,11 +7248,17 @@ class AppController {
         const newSize = parseFloat(Math.max(0.5, Math.min(3.2, initialFontSize * scale)).toFixed(2));
         store.setState({ concertFontSize: newSize });
         document.documentElement.style.setProperty('--font-concert', newSize + 'rem');
-        // Сохраняем индивидуальный размер шрифта для песни в текущем списке
+        // Сохраняем индивидуальный размер шрифта песни на данном устройстве для любого списка
         const cState = store.getState();
-        const cSongId = cState.concertSingleSongId || (cState.songs && cState.songs[cState.concertIndex]?.id) || '';
-        const cPlId = cState.concertPlaylistId || 'single';
+        let cSong = cState.songs.find(s => s.id === (cState.concertSingleSongId || cState.currentSongId));
+        if (!cSong && cState.concertPlaylistId) {
+          const item = (cState.playlistItems || []).filter(it => it.playlist_id === cState.concertPlaylistId)[cState.concertIndex];
+          if (item) cSong = cState.songs.find(s => s.id === item.song_id);
+        }
+        const cSongId = cSong ? cSong.id : (cState.concertSingleSongId || '');
         if (cSongId) {
+          localStorage.setItem('ov_concert_font_' + cSongId, String(newSize));
+          const cPlId = cState.concertPlaylistId || 'single';
           localStorage.setItem('ov_concert_font_' + cPlId + '_' + cSongId, String(newSize));
         }
       }
@@ -7624,10 +7771,36 @@ class AppController {
     }
   }
 
+  precalculateDeviceConcertFonts(songsList) {
+    if (!songsList || songsList.length === 0) return;
+    const bodyEl = document.getElementById('concert-body');
+    const availWidth = (bodyEl && bodyEl.clientWidth > 0) ? bodyEl.clientWidth : (window.innerWidth - 20);
+    const availHeight = (bodyEl && bodyEl.clientHeight > 0) ? bodyEl.clientHeight : (window.innerHeight - 80);
+    if (availWidth <= 0) return;
+
+    // Вычисляем и сохраняем эффективный размер шрифта для каждой песни в локальной памяти устройства
+    let computedCount = 0;
+    for (let i = 0; i < songsList.length; i++) {
+      const s = songsList[i];
+      if (!s || !s.id) continue;
+      const deviceKey = 'ov_concert_font_' + s.id;
+      // Если пользователь уже вручную настраивал размер для этой песни, не перезаписываем его настройку
+      if (localStorage.getItem(deviceKey)) continue;
+
+      const effFont = SongParser.computeConcertEffectiveFontSize(s, availWidth, availHeight);
+      localStorage.setItem('ov_concert_font_calc_' + s.id, String(effFont));
+      computedCount++;
+    }
+    if (computedCount > 0) {
+      AppLogger.info('CONCERT', 'Предпросчитаны размеры шрифтов PT Serif для ' + computedCount + ' песен');
+    }
+  }
+
   fitConcertSongToViewport() {
     const bodyEl = document.getElementById('concert-body');
     if (!bodyEl) return;
     const availWidth = bodyEl.clientWidth;
+    const availHeight = bodyEl.clientHeight || (window.innerHeight - 80);
     if (availWidth <= 0) return;
 
     const state = store.getState();
@@ -7637,25 +7810,27 @@ class AppController {
                    return item && item.song_id === s.id;
                  }) : null);
 
-    // Проверяем сохраненный индивидуальный размер шрифта для этой песни в текущем списке
+    // Индивидуальный размер шрифта песни на данном устройстве для любого списка:
+    // Первично проверяем персональный размер для песни ov_concert_font_<songId>,
+    // а также обратную совместимость с ранее сохраненными ключами ov_concert_font_<plId>_<songId>.
     const songId = song ? song.id : '';
     const plId = state.concertPlaylistId || 'single';
-    const customKey = 'ov_concert_font_' + plId + '_' + songId;
-    const savedCustomFont = parseFloat(localStorage.getItem(customKey) || '0');
+    const deviceSongKey = 'ov_concert_font_' + songId;
+    const legacyPlKey = 'ov_concert_font_' + plId + '_' + songId;
+    const savedCustomFont = parseFloat(localStorage.getItem(deviceSongKey) || localStorage.getItem(legacyPlKey) || localStorage.getItem('ov_concert_font_calc_' + songId) || '0');
 
     let fontSize;
     if (savedCustomFont > 0.4) {
       fontSize = savedCustomFont;
     } else {
-      const baseMaxLen = SongParser.calcSongVisualMaxLen(song);
+      // Предпросчитанный эффективный размер шрифта для песни:
+      // оптимизирован под шрифт PT Serif с точным расчетом ширины каждого символа
+      // и заполнением как по ширине строк, так и по высоте экрана
+      fontSize = SongParser.computeConcertEffectiveFontSize(song, availWidth, availHeight);
       const offset = parseInt(state.concertLenOffset || 0, 10);
-      // Самая широкая строка + 1 символ + пользовательское смещение из настроек
-      const effectiveMaxLen = Math.max(10, baseMaxLen + 1 + offset);
-
-      // Рассчитываем размер шрифта так, чтобы самая широкая строка заполнила ширину экрана
-      const charWidthPx = (availWidth - 24) / effectiveMaxLen;
-      let initialFontSize = Math.min(2.50, Math.max(0.65, charWidthPx / 8.8));
-      fontSize = parseFloat(initialFontSize.toFixed(2));
+      if (offset !== 0) {
+        fontSize = parseFloat(Math.max(0.65, Math.min(2.50, fontSize - (offset * 0.03))).toFixed(2));
+      }
     }
     let lineMargin = 0.05;
 
@@ -7725,17 +7900,33 @@ class AppController {
         store.setState({ concertFontSize: sz });
         document.documentElement.style.setProperty('--font-concert', sz + 'rem');
         const cState = store.getState();
-        const cSongId = cState.concertSingleSongId || (cState.songs && cState.songs[cState.concertIndex]?.id) || '';
-        const cPlId = cState.concertPlaylistId || 'single';
-        if (cSongId) localStorage.setItem('ov_concert_font_' + cPlId + '_' + cSongId, String(sz));
+        let cSong = cState.songs.find(s => s.id === (cState.concertSingleSongId || cState.currentSongId));
+        if (!cSong && cState.concertPlaylistId) {
+          const item = (cState.playlistItems || []).filter(it => it.playlist_id === cState.concertPlaylistId)[cState.concertIndex];
+          if (item) cSong = cState.songs.find(s => s.id === item.song_id);
+        }
+        const cSongId = cSong ? cSong.id : (cState.concertSingleSongId || '');
+        if (cSongId) {
+          localStorage.setItem('ov_concert_font_' + cSongId, String(sz));
+          const cPlId = cState.concertPlaylistId || 'single';
+          localStorage.setItem('ov_concert_font_' + cPlId + '_' + cSongId, String(sz));
+        }
       } else if (act === 'concert-font-plus') {
         const sz = parseFloat(Math.min(3.2, (store.getState().concertFontSize || 1.6) + 0.15).toFixed(2));
         store.setState({ concertFontSize: sz });
         document.documentElement.style.setProperty('--font-concert', sz + 'rem');
         const cState = store.getState();
-        const cSongId = cState.concertSingleSongId || (cState.songs && cState.songs[cState.concertIndex]?.id) || '';
-        const cPlId = cState.concertPlaylistId || 'single';
-        if (cSongId) localStorage.setItem('ov_concert_font_' + cPlId + '_' + cSongId, String(sz));
+        let cSong = cState.songs.find(s => s.id === (cState.concertSingleSongId || cState.currentSongId));
+        if (!cSong && cState.concertPlaylistId) {
+          const item = (cState.playlistItems || []).filter(it => it.playlist_id === cState.concertPlaylistId)[cState.concertIndex];
+          if (item) cSong = cState.songs.find(s => s.id === item.song_id);
+        }
+        const cSongId = cSong ? cSong.id : (cState.concertSingleSongId || '');
+        if (cSongId) {
+          localStorage.setItem('ov_concert_font_' + cSongId, String(sz));
+          const cPlId = cState.concertPlaylistId || 'single';
+          localStorage.setItem('ov_concert_font_' + cPlId + '_' + cSongId, String(sz));
+        }
       } else if (act === 'concert-transpose-minus') {
         window.appController.currentSongTranspose = (window.appController.currentSongTranspose || 0) - 1;
         window.appController.renderConcertSong(false);
@@ -8716,16 +8907,34 @@ case 'clear-search': {
         break;
 
       case 'concert-font-plus': {
-        const sz = Math.min(2.8, state.concertFontSize + 0.15);
+        const sz = parseFloat(Math.min(3.2, (state.concertFontSize || 1.6) + 0.15).toFixed(2));
         store.setState({ concertFontSize: sz });
         document.documentElement.style.setProperty('--font-concert', sz + 'rem');
+        let curSong = state.songs.find(s => s.id === (state.concertSingleSongId || state.currentSongId));
+        if (!curSong && state.concertPlaylistId) {
+          const item = (state.playlistItems || []).filter(it => it.playlist_id === state.concertPlaylistId)[state.concertIndex];
+          if (item) curSong = state.songs.find(s => s.id === item.song_id);
+        }
+        if (curSong) {
+          localStorage.setItem('ov_concert_font_' + curSong.id, String(sz));
+          localStorage.setItem('ov_concert_font_' + (state.concertPlaylistId || 'single') + '_' + curSong.id, String(sz));
+        }
         break;
       }
 
       case 'concert-font-minus': {
-        const sz = Math.max(0.5, (state.concertFontSize || 0.95) - 0.08);
+        const sz = parseFloat(Math.max(0.5, (state.concertFontSize || 0.95) - 0.08).toFixed(2));
         store.setState({ concertFontSize: sz });
         document.documentElement.style.setProperty('--font-concert', sz + 'rem');
+        let curSong = state.songs.find(s => s.id === (state.concertSingleSongId || state.currentSongId));
+        if (!curSong && state.concertPlaylistId) {
+          const item = (state.playlistItems || []).filter(it => it.playlist_id === state.concertPlaylistId)[state.concertIndex];
+          if (item) curSong = state.songs.find(s => s.id === item.song_id);
+        }
+        if (curSong) {
+          localStorage.setItem('ov_concert_font_' + curSong.id, String(sz));
+          localStorage.setItem('ov_concert_font_' + (state.concertPlaylistId || 'single') + '_' + curSong.id, String(sz));
+        }
         break;
       }
 
