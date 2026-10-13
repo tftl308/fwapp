@@ -5653,6 +5653,7 @@ class SearchEngine {
         normKey,
         titleWords: normTitle.split(' ').filter(Boolean),
         altWords: normAlt.split(' ').filter(Boolean),
+        bodyWords: new Set(normBody.split(' ').filter(Boolean)),
         allWords: (normTitle + ' ' + normAlt + ' ' + normTags + ' ' + normAuthor + ' ' + normBody).split(' ').filter(Boolean),
         allText: [normId, numId, normTitle, normAlt, normTags, normAuthor, normBody].join(' ')
       };
@@ -5700,72 +5701,91 @@ class SearchEngine {
     const scored = [];
 
     for (const doc of candidates) {
-      let titleMatchesCount = 0;
-      let bodyMatchesCount = 0;
-      let anyMatch = false;
+      let exactTitleCount = 0;
+      let exactBodyCount = 0;
+      let fuzzyTitleCount = 0;
+      let fuzzyBodyCount = 0;
+      let termMatchedCount = 0;
       let score = 0;
 
       for (const term of terms) {
-        let matchedInTitle = false;
-        let matchedInBody = false;
+        let matched = false;
 
         // ID номер песни
         if (term === doc.normId || term === doc.numId) {
-          matchedInTitle = true;
-          score += 500;
+          exactTitleCount++;
+          matched = true;
+          score += 10000;
+          termMatchedCount++;
+          continue;
         }
 
-        // Поиск в названии
+        // 1. Точное совпадение в названии без ошибок
         if (doc.normTitle.includes(term)) {
-          matchedInTitle = true;
-          score += 150;
+          exactTitleCount++;
+          matched = true;
+          score += 2000;
+          if (doc.titleWords.includes(term)) score += 500;
         } else {
+          // Нечеткий поиск в названии
           for (const tw of doc.titleWords) {
             if (term.length >= 3 && isSubsequence(term, tw)) {
-              matchedInTitle = true;
+              fuzzyTitleCount++;
+              matched = true;
               score += 100;
               break;
             }
             if (term.length >= 3 && damerauLevenshtein(term, tw) <= (term.length >= 5 ? 2 : 1)) {
-              matchedInTitle = true;
-              score += 90;
+              fuzzyTitleCount++;
+              matched = true;
+              score += 80;
               break;
             }
           }
         }
 
-        // Поиск в тексте
+        // 2. Точное совпадение в тексте песни (lyrics/body_plain) без опечаток
         if (doc.normBody.includes(term)) {
-          matchedInBody = true;
-          score += 30;
-        } else {
+          exactBodyCount++;
+          matched = true;
+          score += 1000;
+          if (doc.bodyWords && doc.bodyWords.has(term)) score += 200;
+        } else if (!matched) {
+          // Нечеткий поиск в тексте только если слово еще не сопоставлено
           for (const aw of doc.allWords) {
             if (term.length >= 3 && isSubsequence(term, aw)) {
-              matchedInBody = true;
+              fuzzyBodyCount++;
+              matched = true;
               score += 20;
               break;
             }
             if (term.length >= 3 && damerauLevenshtein(term, aw) <= (term.length >= 5 ? 2 : 1)) {
-              matchedInBody = true;
+              fuzzyBodyCount++;
+              matched = true;
               score += 15;
               break;
             }
           }
         }
 
-        if (matchedInTitle) titleMatchesCount++;
-        if (matchedInBody) bodyMatchesCount++;
-        if (matchedInTitle || matchedInBody) anyMatch = true;
+        if (matched) termMatchedCount++;
       }
 
-      if (anyMatch) {
-        // СТРОГАЯ ИЕРАРХИЯ РЕЛЕВАНТНОСТИ:
-        // 1. Максимальное число совпадений в названии (titleMatchesCount * 10000)
-        // 2. Максимальное число совпадений в тексте (bodyMatchesCount * 1000)
-        // 3. Дополнительные баллы за точность
-        let tierScore = (titleMatchesCount * 10000) + (bodyMatchesCount * 1000);
-        if (doc.normTitle.includes(normalizedClean)) tierScore += 5000;
-        else if (doc.normBody.includes(normalizedClean)) tierScore += 500;
+      if (termMatchedCount > 0) {
+        // СТРОГАЯ ИЕРАРХИЯ:
+        // Точное совпадение без опечаток в тексте песни (exactBodyCount * 10000) РАСПОЛАГАЕТСЯ ВЫШЕ,
+        // чем нечеткое совпадение с опечатками в названии (fuzzyTitleCount * 2000).
+        // Точные совпадения в названии (exactTitleCount * 15000).
+        let tierScore = (exactTitleCount * 15000) + (exactBodyCount * 10000) + (fuzzyTitleCount * 2000) + (fuzzyBodyCount * 500);
+
+        // Бонус, когда ВСЕ слова запроса присутствуют (в любом порядке)
+        if (termMatchedCount === terms.length) {
+          tierScore += 50000;
+        }
+
+        // Бонус за точную фразу целиком
+        if (doc.normTitle.includes(normalizedClean)) tierScore += 10000;
+        else if (doc.normBody.includes(normalizedClean)) tierScore += 3000;
 
         scored.push({ song: doc.song, score: tierScore + score });
       }
@@ -5860,42 +5880,45 @@ class Id3ArtworkHelper {
           const effectiveEnd = Math.min(bytes.length, dataPos + (frameSize > 0 ? frameSize : 1000000));
 
           if (frameId === 'APIC' || frameId === 'PIC') {
-            for (let s = dataPos; s < effectiveEnd - 3; s++) {
-              if (bytes[s] === 0xFF && bytes[s + 1] === 0xD8 && bytes[s + 2] === 0xFF) {
-                let end = effectiveEnd;
-                for (let e = effectiveEnd - 2; e >= s + 4; e--) {
-                  if (bytes[e] === 0xFF && bytes[e + 1] === 0xD9) {
-                    end = e + 2;
-                    break;
-                  }
-                }
-                const imgData = bytes.subarray(s, end);
-                return Id3ArtworkHelper.bytesToDataUrl(imgData, 'image/jpeg');
-              }
-              if (bytes[s] === 0x89 && bytes[s + 1] === 0x50 && bytes[s + 2] === 0x4E && bytes[s + 3] === 0x47) {
-                let end = effectiveEnd;
-                for (let e = effectiveEnd - 8; e >= s + 8; e--) {
-                  if (bytes[e] === 0x49 && bytes[e + 1] === 0x45 && bytes[e + 2] === 0x4E && bytes[e + 3] === 0x44) {
-                    end = e + 8;
-                    break;
-                  }
-                }
-                const imgData = bytes.subarray(s, end);
-                return Id3ArtworkHelper.bytesToDataUrl(imgData, 'image/png');
-              }
+            // Разбор структуры APIC:
+            // Text encoding (1 байт)
+            // MIME type (null-терминированная строка)
+            // Picture type (1 байт)
+            // Description (null-терминированная строка)
+            // Изображение
+            let p = dataPos;
+            const enc = bytes[p++];
+            let mime = 'image/jpeg';
+            if (versionMajor === 2) {
+              let fmt = '';
+              for (let f = 0; f < 3 && p < effectiveEnd; f++) fmt += String.fromCharCode(bytes[p++]);
+              if (fmt.toUpperCase() === 'PNG') mime = 'image/png';
+            } else {
+              let mimeStr = '';
+              while (p < effectiveEnd && bytes[p] !== 0) mimeStr += String.fromCharCode(bytes[p++]);
+              p++; // null terminator
+              if (mimeStr) mime = mimeStr.toLowerCase();
             }
 
-            let p = dataPos + 1;
-            while (p < effectiveEnd && bytes[p] !== 0) p++;
-            p++;
-            p++;
-            while (p < effectiveEnd && bytes[p] !== 0) p++;
-            p++;
+            p++; // picture type (1 byte)
+
+            // Пропускаем описание
+            if (enc === 1 || enc === 2) {
+              while (p + 1 < effectiveEnd && !(bytes[p] === 0 && bytes[p + 1] === 0)) p += 2;
+              p += 2;
+            } else {
+              while (p < effectiveEnd && bytes[p] !== 0) p++;
+              p++;
+            }
+
             if (p < effectiveEnd) {
-              const imgData = bytes.subarray(p, effectiveEnd);
-              if (imgData.length > 50) {
-                return Id3ArtworkHelper.bytesToDataUrl(imgData, 'image/jpeg');
-              }
+              const rawImg = bytes.subarray(p, effectiveEnd);
+              let actualMime = mime;
+              if (rawImg.length >= 3 && rawImg[0] === 0xFF && rawImg[1] === 0xD8 && rawImg[2] === 0xFF) actualMime = 'image/jpeg';
+              else if (rawImg.length >= 8 && rawImg[0] === 0x89 && rawImg[1] === 0x50 && rawImg[2] === 0x4E && rawImg[3] === 0x47) actualMime = 'image/png';
+              else if (rawImg.length >= 3 && rawImg[0] === 0x47 && rawImg[1] === 0x49 && rawImg[2] === 0x46) actualMime = 'image/gif';
+              else if (rawImg.length >= 4 && rawImg[0] === 0x52 && rawImg[1] === 0x49 && rawImg[2] === 0x46 && rawImg[3] === 0x46) actualMime = 'image/webp';
+              return Id3ArtworkHelper.bytesToDataUrl(rawImg, actualMime);
             }
           }
 
@@ -7119,31 +7142,37 @@ class AppController {
 
   setupSongDetailTouchGestures() {
     let initialPinchDist = 0;
-    let initialZoom = 1.0;
+    let initialScale = 1.0;
 
     document.addEventListener('touchstart', (e) => {
-      // Масштабируем всю страницу/контейнер просмотра песни, не меняя размер шрифта
-      const main = document.getElementById('main-content');
-      if (!main || !store.getState().currentSongId) return;
+      // Масштабируем ИСКЛЮЧИТЕЛЬНО текстовый блок аккордов и слов (#lyrics-box),
+      // не затрагивая шапку, кнопки действий и блок заметок музыканта
+      const box = document.getElementById('lyrics-box');
+      if (!box || !store.getState().currentSongId) return;
       if (e.touches.length === 2) {
+        // Убеждаемся, что жест происходит над блоком текста или страницей, но не внутри заметок
+        if (e.target.closest('#input-profile-note') || e.target.closest('input') || e.target.closest('textarea')) return;
         initialPinchDist = Math.hypot(
           e.touches[0].clientX - e.touches[1].clientX,
           e.touches[0].clientY - e.touches[1].clientY
         );
-        initialZoom = parseFloat(main.style.zoom) || 1.0;
+        initialScale = parseFloat(box.dataset.zoomScale || '1.0');
       }
     }, { passive: true });
 
     document.addEventListener('touchmove', (e) => {
-      const main = document.getElementById('main-content');
-      if (!main || !store.getState().currentSongId || initialPinchDist <= 0 || e.touches.length !== 2) return;
+      const box = document.getElementById('lyrics-box');
+      if (!box || !store.getState().currentSongId || initialPinchDist <= 0 || e.touches.length !== 2) return;
       const currentDist = Math.hypot(
         e.touches[0].clientX - e.touches[1].clientX,
         e.touches[0].clientY - e.touches[1].clientY
       );
       const scale = currentDist / initialPinchDist;
-      const newZoom = parseFloat(Math.max(0.6, Math.min(3.0, initialZoom * scale)).toFixed(2));
-      main.style.zoom = newZoom;
+      const newScale = parseFloat(Math.max(0.6, Math.min(2.5, initialScale * scale)).toFixed(2));
+      box.dataset.zoomScale = String(newScale);
+      box.style.transformOrigin = 'top left';
+      box.style.transform = newScale === 1.0 ? '' : `scale(${newScale})`;
+      box.style.width = newScale > 1.0 ? `${(100 / newScale).toFixed(2)}%` : '100%';
     }, { passive: true });
 
     document.addEventListener('touchend', (e) => {
@@ -8067,8 +8096,7 @@ async setupWakeLock() {
       }
 
       case 'go-back': {
-        const mainEl = document.getElementById('main-content');
-        if (mainEl) mainEl.style.zoom = '1';
+        
         store.setState({ currentSongId: null });
         if (typeof window._savedPageScrollY === 'number') {
           requestAnimationFrame(() => {
@@ -10643,7 +10671,7 @@ async handleBatchAudioUpload(files) {
   // СТРАНИЦА ПЕСНИ
   renderSongDetailView(container, song, headerActions) {
     container.innerHTML = '';
-    container.style.zoom = '1';
+    
     window.scrollTo({ top: 0, behavior: 'instant' });
     const state = store.getState();
 

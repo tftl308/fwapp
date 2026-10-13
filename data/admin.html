@@ -3799,14 +3799,14 @@ ${lyricsBody}
       const tbody = document.getElementById('songs-tbody');
       const countEl = document.getElementById('song-count');
       const filter = (document.getElementById('catalog-search').value || '').toLowerCase().trim();
+      const terms = filter.split(/\s+/).filter(Boolean);
       
       tbody.innerHTML = '';
       const filtered = dbSongs.filter(s => {
-        if (!filter) return true;
-        return (s.id && s.id.includes(filter)) ||
-               (s.title && s.title.toLowerCase().includes(filter)) ||
-               (s.author && s.author.toLowerCase().includes(filter)) ||
-               (s.alt_title && s.alt_title.toLowerCase().includes(filter));
+        if (terms.length === 0) return true;
+        const allText = ((s.id || '') + ' ' + (s.title || '') + ' ' + (s.author || '') + ' ' + (s.alt_title || '') + ' ' + (s.body_plain || s.lyrics || '')).toLowerCase();
+        // Все слова запроса должны присутствовать в документе (в любом порядке)
+        return terms.every(t => allText.includes(t));
       });
 
       countEl.textContent = dbSongs.length;
