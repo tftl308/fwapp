@@ -22,7 +22,7 @@ fs.mkdirSync(path.join(DIST_PWA, 'data'), { recursive: true });
 const filesToCopy = [
   'index.html',
   'sw.js',
-  'manifest.json'
+  'manifest.webmanifest'
 ];
 
 for (const file of filesToCopy) {
@@ -32,7 +32,7 @@ for (const file of filesToCopy) {
 }
 
 // Copy data files
-const dataFiles = ['songs.csv', 'audio.csv', 'playlists.csv', 'playlist_items.csv', 'user_notes.csv', 'manifest.json'];
+const dataFiles = ['songs.csv', 'audio.csv', 'playlists.csv', 'playlist_items.csv', 'user_notes.csv', 'manifest.webmanifest'];
 for (const df of dataFiles) {
   const src = path.join(ROOT, 'data', df);
   if (fs.existsSync(src)) {
@@ -41,3 +41,7 @@ for (const df of dataFiles) {
 }
 
 console.log('✓ Successfully created dist/pwa package ready for static hosting or local PWA install.');
+
+if (fs.existsSync(path.join(ROOT, 'manifest.webmanifest'))) {
+  fs.copyFileSync(path.join(ROOT, 'manifest.webmanifest'), path.join(DIST_PWA, 'manifest.json'));
+}
