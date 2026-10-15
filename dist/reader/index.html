@@ -825,6 +825,8 @@
       border-radius: 0.6rem;
       padding: 1.2rem 1rem;
       margin-bottom: 1.25rem;
+      transform-origin: top left;
+      will-change: transform;
     }
 
     .lyrics-render-line {
@@ -7665,9 +7667,14 @@ class AppController {
     if (bodyEl) {
       bodyEl.innerHTML = '';
       Renderer.renderLyrics(bodyEl, currentSong, this.currentSongTranspose || 0, true);
-      // Динамическая адаптация размера шрифта и межстрочного интервала под высоту и ширину экрана
+      // Динамическая адаптация размера шрифта и межстрочного интервала строго после загрузки шрифта
       if (shouldAutoFit) {
-        requestAnimationFrame(() => this.fitConcertSongToViewport());
+        const doFit = () => this.fitConcertSongToViewport();
+        if (document.fonts && document.fonts.ready) {
+          document.fonts.ready.then(() => requestAnimationFrame(doFit));
+        } else {
+          requestAnimationFrame(doFit);
+        }
       }
     }
   }

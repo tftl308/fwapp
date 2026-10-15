@@ -825,6 +825,8 @@
       border-radius: 0.6rem;
       padding: 1.2rem 1rem;
       margin-bottom: 1.25rem;
+      transform-origin: top left;
+      will-change: transform;
     }
 
     .lyrics-render-line {
@@ -1266,6 +1268,7 @@
       left: 0;
       width: 100vw;
       height: 100vh;
+      height: 100dvh;
       z-index: 100;
       background: var(--bg-concert, #fcfbf9);
       color: var(--text-concert, #1c1917);
@@ -6907,7 +6910,9 @@ class AppController {
     // Регистрация Service Worker для PWA (при запуске через локальный сервер http:// или https://)
     if ('serviceWorker' in navigator && window.location.protocol.startsWith('http')) {
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('./sw.js').then((reg) => {
+        // Версионированный запрос регистрации для обхода кэша CDN GitHub Pages
+        const swUrl = './sw.js?v=' + (window._appVersion || Date.now());
+        navigator.serviceWorker.register(swUrl).then((reg) => {
           AppLogger.info('PWA', 'Service Worker зарегистрирован: ' + reg.scope);
         }).catch((err) => {
           AppLogger.warn('PWA', 'Ошибка Service Worker: ' + err.message);
@@ -7034,7 +7039,13 @@ class AppController {
       if (typeof INLINED_SONGS_CSV_DATA !== 'undefined' && INLINED_SONGS_CSV_DATA) {
         try {
           AppLogger.info('BOOT', 'Инициализация каталога из встроенного сборника...');
-          const parsed = CsvHelper.parse(INLINED_SONGS_CSV_DATA);
+          let parsed = [];
+          try {
+            parsed = CsvHelper.parse(INLINED_SONGS_CSV_DATA) || [];
+          } catch(errCsv) {
+            AppLogger.error('BOOT', 'Ошибка парсинга встроенного CSV: ' + errCsv.message);
+            parsed = [];
+          }
           songs = parsed.map(r => ({
             id: String(r.id || '').padStart(4, '0'),
             number: r.number || r.id,
@@ -7764,9 +7775,14 @@ class AppController {
     if (bodyEl) {
       bodyEl.innerHTML = '';
       Renderer.renderLyrics(bodyEl, currentSong, this.currentSongTranspose || 0, true);
-      // Динамическая адаптация размера шрифта и межстрочного интервала под высоту и ширину экрана
+      // Динамическая адаптация размера шрифта и межстрочного интервала строго после загрузки шрифта
       if (shouldAutoFit) {
-        requestAnimationFrame(() => this.fitConcertSongToViewport());
+        const doFit = () => this.fitConcertSongToViewport();
+        if (document.fonts && document.fonts.ready) {
+          document.fonts.ready.then(() => requestAnimationFrame(doFit));
+        } else {
+          requestAnimationFrame(doFit);
+        }
       }
     }
   }
@@ -12507,6 +12523,17 @@ async handleBatchAudioUpload(files) {
 function bootApp() {
   if (window._appBooted) return;
   window._appBooted = true;
+
+  // Восстановление URL после редиректа 404 на GitHub Pages
+  try {
+    if (sessionStorage && sessionStorage.redirect) {
+      const redirectUrl = sessionStorage.redirect;
+      delete sessionStorage.redirect;
+      if (redirectUrl && redirectUrl !== location.href) {
+        history.replaceState(null, null, redirectUrl);
+      }
+    }
+  } catch(e) {}
   window.appController = new AppController();
   window.appController.init();
   window.addEventListener('resize', () => {
