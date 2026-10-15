@@ -647,13 +647,13 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       <div style="max-height: 520px; overflow-y: auto; margin-top: 1rem;">
         <table id="songs-table">
           <thead>
-            <tr>
-              <th style="width: 75px;">ID (№)</th>
-              <th>Название песни</th>
-              <th style="width: 85px;">Тональность</th>
-              <th style="width: 70px;">Capo</th>
-              <th style="width: 85px;">Темп</th>
-              <th>Сборник (alt_title)</th>
+            <tr style="user-select: none;">
+              <th data-sort="id" style="width: 75px; cursor: pointer;" title="Сортировать по ID">ID (№) <span class="sort-indicator" id="sort-ind-id">↕</span></th>
+              <th data-sort="title" style="cursor: pointer;" title="Сортировать по Названию">Название песни <span class="sort-indicator" id="sort-ind-title">↕</span></th>
+              <th data-sort="key" style="width: 85px; cursor: pointer;" title="Сортировать по Тональности">Тональность <span class="sort-indicator" id="sort-ind-key">↕</span></th>
+              <th data-sort="capo" style="width: 70px; cursor: pointer;" title="Сортировать по Capo">Capo <span class="sort-indicator" id="sort-ind-capo">↕</span></th>
+              <th data-sort="tempo" style="width: 85px; cursor: pointer;" title="Сортировать по Темпу">Темп <span class="sort-indicator" id="sort-ind-tempo">↕</span></th>
+              <th data-sort="theme" style="cursor: pointer;" title="Сортировать по Сборнику">Сборник (alt_title) <span class="sort-indicator" id="sort-ind-theme">↕</span></th>
               <th style="width: 140px;">Действия</th>
             </tr>
           </thead>
@@ -755,10 +755,10 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     <div class="card">
       <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 1rem; margin-bottom: 1rem;">
         <div>
-          <h3 style="margin: 0; font-size: 1.25rem;">Пакетное переименование и сопоставление аудиофайлов</h3>
+          <h3 style="margin: 0; font-size: 1.25rem;">Пакетная проверка и переименование аудиотреков</h3>
           <p style="color: var(--muted); font-size: 0.85rem; margin-top: 0.35rem;">
-            Укажите папку с аудиофайлами (<code>.mp3</code>, <code>.ogg</code>, <code>.wav</code>, <code>.m4a</code>).
-            Система выполнит нестрогое интеллектуальное сопоставление с названиями из реестра песен, добавит 4-значный <strong>{ID}</strong> и выбранный <strong>{TYPE}</strong> слева к имени файла (<code>{ID}_{TYPE}_{оригинальное_имя}</code>) и упакует результат в архив или сохранит прямо в папку.
+            Алгоритм интеллектуального анализа сопоставляет произвольные имена файлов треков с реестром песен каталога (по названию, подзаголовкам и первым строкам куплетов). 
+            Аудиофайлы без специальных маркеров относятся к категории «альбом». Система выявляет расхождения и файлы со слабым распознаванием, предлагает переименовать их, даёт возможность вручную утвердить или отредактировать новое имя и выполняет поточное переименование на диске или выгрузку в ZIP.
           </p>
         </div>
       </div>
@@ -767,10 +767,10 @@ https://github.com/nodeca/pako/blob/main/LICENSE
       <div style="background: var(--bg); padding: 1.25rem; border-radius: 8px; border: 1px solid var(--border); margin-bottom: 1.5rem;">
         <div class="grid-2">
           <div class="form-group" style="margin-bottom: 0;">
-            <label style="font-weight: 700;">Тип записи для текущей партии файлов:</label>
+            <label style="font-weight: 700;">Тип записи по умолчанию (для треков без тегов):</label>
             <select id="audio-batch-type-select" class="form-control" style="font-weight: 600;">
-              <option value="альбом">альбом — Студийная оригинальная запись</option>
-              <option value="запись">запись — Репетиционная дорожка / демка</option>
+              <option value="альбом" selected>альбом — Студийная оригинальная запись (по умолчанию)</option>
+              <option value="запись">запись — Репетиционная дорожка / богослужение</option>
               <option value="минус">минус — Инструментальная фонограмма без вокала</option>
               <option value="импро">импро — Концертная импровизация / Живой звук</option>
             </select>
@@ -788,33 +788,35 @@ https://github.com/nodeca/pako/blob/main/LICENSE
         </div>
 
         <div style="margin-top: 1.25rem; display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: center;">
-          <button class="btn btn-primary" id="btn-analyze-audio-matching">🔍 1. Сопоставить файлы с песнями</button>
-          <button class="btn btn-success" id="btn-direct-folder-rename" style="display: none;">⚡ 2. Переименовать файлы прямо в папке на лету</button>
-          <button class="btn btn-outline" id="btn-execute-audio-rename" style="display: none;">📦 Скачать переименованные (ZIP)</button>
+          <button class="btn btn-primary" id="btn-analyze-audio-matching">🔍 1. Проверить файлы и найти расхождения</button>
+          <button class="btn btn-success" id="btn-direct-folder-rename" style="display: none;">⚡ 2. Переименовать утверждённые файлы прямо в папке</button>
+          <button class="btn btn-outline" id="btn-execute-audio-rename" style="display: none;">📦 Скачать утверждённые файлы (ZIP)</button>
           <button class="btn btn-outline" id="btn-reset-audio-matching">Сбросить</button>
         </div>
       </div>
 
-      <!-- MATCHING RESULTS TABLE -->
+      <!-- FILTER TABS & MATCHING RESULTS TABLE -->
       <div id="audio-matching-container" style="display: none; margin-bottom: 1.5rem;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem; flex-wrap: wrap; gap: 0.5rem;">
           <div id="audio-matching-stats" style="font-weight: 700; font-size: 1rem;">
             <!-- Rendered by JS -->
           </div>
-          <div style="font-size: 0.85rem; color: var(--muted);">
-            При необходимости вы можете вручную скорректировать сопоставленную песню в выпадающем списке строки.
+          <div style="display: flex; gap: 0.5rem; align-items: center;">
+            <span style="font-size: 0.82rem; color: var(--muted);">Фильтр:</span>
+            <button type="button" class="btn btn-sm btn-outline active" id="btn-filter-audio-all" style="font-size: 0.78rem; padding: 0.2rem 0.5rem;">Все файлы</button>
+            <button type="button" class="btn btn-sm btn-outline" id="btn-filter-audio-issues" style="font-size: 0.78rem; padding: 0.2rem 0.5rem; color: #b91c1c; border-color: #f87171;">⚠️ Требующие внимания / расхождения</button>
           </div>
         </div>
 
-        <div style="overflow-x: auto; max-height: 480px; border: 1px solid var(--border); border-radius: 8px;">
+        <div style="overflow-x: auto; max-height: 520px; border: 1px solid var(--border); border-radius: 8px;">
           <table class="table" style="font-size: 0.85rem; margin-bottom: 0;" id="audio-rename-table">
             <thead>
               <tr style="background: var(--bg); position: sticky; top: 0; z-index: 5;">
                 <th style="width: 35px; text-align: center;"><input type="checkbox" id="audio-rename-master-check" checked></th>
-                <th style="width: 250px;">Исходный файл</th>
-                <th style="width: 80px;">Сходство</th>
+                <th style="width: 250px;">Текущее имя файла</th>
+                <th style="width: 90px; text-align: center;">Статус распознавания</th>
                 <th style="width: 280px;">Сопоставленная песня каталога</th>
-                <th>Новое стандартизированное имя</th>
+                <th>Предлагаемое новое имя (редактируемое)</th>
               </tr>
             </thead>
             <tbody id="audio-rename-tbody">
@@ -3795,6 +3797,19 @@ ${lyricsBody}
     // ==========================================
     // 3. CATALOG RENDERING & EDITING
     // ==========================================
+    let catalogSortColumn = 'id';
+    let catalogSortDirection = 'asc'; // 'asc' | 'desc'
+
+    function sortCatalogBy(column) {
+      if (catalogSortColumn === column) {
+        catalogSortDirection = catalogSortDirection === 'asc' ? 'desc' : 'asc';
+      } else {
+        catalogSortColumn = column;
+        catalogSortDirection = 'asc';
+      }
+      renderCatalog();
+    }
+
     function renderCatalog() {
       const tbody = document.getElementById('songs-tbody');
       const countEl = document.getElementById('song-count');
@@ -3805,8 +3820,53 @@ ${lyricsBody}
       const filtered = dbSongs.filter(s => {
         if (terms.length === 0) return true;
         const allText = ((s.id || '') + ' ' + (s.title || '') + ' ' + (s.author || '') + ' ' + (s.alt_title || '') + ' ' + (s.body_plain || s.lyrics || '')).toLowerCase();
-        // Все слова запроса должны присутствовать в документе (в любом порядке)
         return terms.every(t => allText.includes(t));
+      });
+
+      // Update sort indicators in header
+      ['id', 'title', 'key', 'capo', 'tempo', 'theme'].forEach(col => {
+        const ind = document.getElementById('sort-ind-' + col);
+        if (ind) {
+          if (catalogSortColumn === col) {
+            ind.textContent = catalogSortDirection === 'asc' ? '▲' : '▼';
+            ind.style.color = 'var(--primary)';
+          } else {
+            ind.textContent = '↕';
+            ind.style.color = '#94a3b8';
+          }
+        }
+      });
+
+      // Sort filtered array according to active column and direction
+      filtered.sort((a, b) => {
+        let valA = '';
+        let valB = '';
+
+        if (catalogSortColumn === 'id') {
+          const numA = parseInt(a.id || a.number || 0, 10);
+          const numB = parseInt(b.id || b.number || 0, 10);
+          return catalogSortDirection === 'asc' ? numA - numB : numB - numA;
+        } else if (catalogSortColumn === 'title') {
+          valA = (a.title || '').toLowerCase();
+          valB = (b.title || '').toLowerCase();
+        } else if (catalogSortColumn === 'key') {
+          valA = (a.key_default || a.key || '').toLowerCase();
+          valB = (b.key_default || b.key || '').toLowerCase();
+        } else if (catalogSortColumn === 'capo') {
+          const capoA = parseInt(a.capo || 0, 10) || 0;
+          const capoB = parseInt(b.capo || 0, 10) || 0;
+          return catalogSortDirection === 'asc' ? capoA - capoB : capoB - capoA;
+        } else if (catalogSortColumn === 'tempo') {
+          const tempoA = parseInt(a.tempo || 0, 10) || 0;
+          const tempoB = parseInt(b.tempo || 0, 10) || 0;
+          return catalogSortDirection === 'asc' ? tempoA - tempoB : tempoB - tempoA;
+        } else if (catalogSortColumn === 'theme') {
+          valA = (a.theme || a.alt_title || '').toLowerCase();
+          valB = (b.theme || b.alt_title || '').toLowerCase();
+        }
+
+        const cmp = valA.localeCompare(valB, 'ru', { numeric: true, sensitivity: 'base' });
+        return catalogSortDirection === 'asc' ? cmp : -cmp;
       });
 
       countEl.textContent = dbSongs.length;
@@ -3827,212 +3887,22 @@ ${lyricsBody}
           <td>${sTempo}</td>
           <td>${sTheme}</td>
           <td style="white-space: nowrap;">
-            <button class="btn btn-sm btn-outline" style="padding: 0.25rem 0.5rem; font-size: 0.78rem; background: #fef3c7; border-color: #f59e0b; color: #92400e;" onclick="openSongInVisualEditor('${song.id}')" title="Открыть в интерактивном визуальном редакторе аккордов над текстом">🎨 Аккорды</button>
-            <button class="btn btn-sm btn-outline" style="padding: 0.25rem 0.5rem; font-size: 0.78rem;" onclick="openEditModal('${song.id}')" title="Редактировать все 22 поля песни">✏️ Поля</button>
-            <button class="btn btn-sm btn-outline" style="padding: 0.25rem 0.45rem; font-size: 0.78rem; color: #b91c1c;" onclick="deleteSong('${song.id}')" title="Удалить песню">✕</button>
+            <button class="btn btn-sm btn-outline" style="padding: 0.25rem 0.5rem; font-size: 0.78rem; background: #fef3c7; border-color: #f59e0b; color: #b45309;" onclick="openSongInInteractiveStudio('${song.id}')" title="Открыть в интерактивном редакторе OpenSong/DOCX">🎼 В студию</button>
+            <button class="btn btn-sm btn-outline" style="padding: 0.25rem 0.5rem; font-size: 0.78rem;" onclick="openEditModal('${song.id}')">✏️ Ред.</button>
+            <button class="btn btn-sm btn-outline" style="padding: 0.25rem 0.5rem; font-size: 0.78rem; color: var(--danger); border-color: var(--danger);" onclick="deleteSong('${song.id}')">🗑</button>
           </td>
         `;
         tbody.appendChild(tr);
       });
     }
 
-    document.getElementById('catalog-search').addEventListener('input', renderCatalog);
-
-    
-    // =========================================================================
-    // ПЕРЕХОД ПЕСНИ ИЗ КАТАЛОГА В ИНТЕРАКТИВНЫЙ РЕДАКТОР АККОРДОВ
-    // =========================================================================
-    function parseChordProTextToModel(chordProText, songMeta) {
-      const lines = (chordProText || '').split(/\r?\n/);
-      const model = {
-        id: songMeta.id || '0001',
-        number: songMeta.number || parseInt(songMeta.id, 10) || 1,
-        title: songMeta.title || 'Песня',
-        key_default: songMeta.key || songMeta.key_default || '',
-        capo: songMeta.capo || '',
-        tempo: songMeta.tempo || '',
-        author: songMeta.author || 'Огненный ветер',
-        lines: []
-      };
-
-      for (let lineIndex = 0; lineIndex < lines.length; lineIndex++) {
-        const rawLine = lines[lineIndex];
-        const trimmed = rawLine.trim();
-        if (!trimmed) {
-          model.lines.push({ kind: 'blank', lyric: '', chords: [] });
-          continue;
-        }
-
-        // Meta tags: {title: ...}, {key: ...}, {capo: ...}, {tempo: ...} - extract metadata and skip without eating song text
-        const mMeta = trimmed.match(/^{(title|key|capo|tempo|artist|composer):\s*(.*?)}/i);
-        if (mMeta) {
-          const field = mMeta[1].toLowerCase();
-          const val = mMeta[2].trim();
-          if (field === 'title' && !model.title) model.title = val;
-          if (field === 'key' && !model.key_default) model.key_default = val;
-          if (field === 'capo' && !model.capo) model.capo = val;
-          if (field === 'tempo' && !model.tempo) model.tempo = val;
-          continue;
-        }
-
-        // OpenSong dot chord line: .Am  G  F
-        if (rawLine.startsWith('.')) {
-          const chordLine = rawLine.substring(1);
-          let lyricStr = '';
-          const nextLine = lines[lineIndex + 1];
-          if (nextLine !== undefined && !nextLine.startsWith('.') && !nextLine.startsWith('[') && !nextLine.startsWith('{')) {
-            lyricStr = nextLine.startsWith(' ') ? nextLine.substring(1) : nextLine;
-            lineIndex++;
-          }
-
-          const chords = [];
-          const regex = /\S+/g;
-          let m;
-          while ((m = regex.exec(chordLine)) !== null) {
-            chords.push({
-              name: m[0],
-              chord: m[0],
-              charIndex: Math.max(0, m.index),
-              confidence: 1.0,
-              manual: true
-            });
-          }
-
-          model.lines.push({
-            kind: 'verse',
-            lyric: lyricStr,
-            chords: chords
-          });
-          continue;
-        }
-
-        // Section header in OpenSong format: [V1], [C], [B] strictly on its own: ^\[(V\d*|C\d*|B\d*|T|E|Intro|Outro|Куплет.*|Припев.*|Бридж.*)\]$
-        if (/^\[(v\d*|c\d*|b\d*|t|e|intro|outro|куплет[^\]]*|припев[^\]]*|бридж[^\]]*|вступление[^\]]*)\]$/i.test(trimmed)) {
-          const kind = /припев|c/i.test(trimmed) ? 'chorus-header' : 'section-header';
-          model.lines.push({ kind: kind, lyric: trimmed, chords: [] });
-          continue;
-        }
-
-        // Parse line with inline [Chord] tokens
-        let lyric = '';
-        const chords = [];
-        const regex = /\[([^\]]+)\]/g;
-        let match;
-        let lastEnd = 0;
-
-        while ((match = regex.exec(rawLine)) !== null) {
-          lyric += rawLine.slice(lastEnd, match.index);
-          const chordToken = match[1].trim();
-          if (/[-—]/.test(chordToken)) {
-            const subparts = chordToken.split(/[-—]+/).map(p => p.trim()).filter(Boolean);
-            if (subparts.length > 1 && subparts.every(p => /^[A-H]/.test(p))) {
-              subparts.forEach((sub, subIdx) => {
-                chords.push({
-                  name: sub,
-                  chord: sub,
-                  charIndex: lyric.length + (subIdx * 3),
-                  confidence: 1.0,
-                  manual: true
-                });
-              });
-              lastEnd = regex.lastIndex;
-              continue;
-            }
-          }
-          chords.push({
-            name: chordToken,
-            chord: chordToken,
-            charIndex: lyric.length,
-            confidence: 1.0,
-            manual: true
-          });
-          lastEnd = regex.lastIndex;
-        }
-        lyric += rawLine.slice(lastEnd);
-
-        // Check if this was a standalone chord line without brackets
-        if (chords.length === 0 && isChordLine(trimmed)) {
-          const tokens = trimmed.split(/\s+/);
-          tokens.forEach((tok, i) => {
-            chords.push({
-              name: tok,
-              chord: tok,
-              charIndex: i * 8,
-              confidence: 0.9,
-              manual: true
-            });
-          });
-          lyric = '';
-        }
-
-        model.lines.push({
-          kind: 'verse',
-          lyric: lyric,
-          chords: chords
-        });
-      }
-
-      return model;
-    }
-
-    window.openSongInVisualEditor = function(songId) {
-      const song = dbSongs.find(s => s.id === songId);
-      if (!song) return;
-
-      // 1. Build or retrieve model
-      let model = song.rawModel;
-      if (!model) {
-        const lyricsText = song.lyrics || song.body_plain || '';
-        const chordProText = song.chordpro || song.body_chordpro || '';
-
-        // ПРИОРИТЕТ 1: Если lyrics содержит OpenSong разметку (строки с точкой .Am или <lyrics>)
-        if (lyricsText.includes('\n.') || lyricsText.startsWith('.') || lyricsText.includes('<lyrics>')) {
-          model = buildModelFromOpenSongLyrics(lyricsText, song);
-        }
-        // ПРИОРИТЕТ 2: Если есть ChordPro аккорды [Am]
-        else if (chordProText && chordProText.includes('[')) {
-          model = parseChordProTextToModel(chordProText, song);
-        }
-        // ПРИОРИТЕТ 3: Обычный чистый текст OpenSong / DOCX
-        else if (lyricsText.trim()) {
-          model = buildModelFromOpenSongLyrics(lyricsText, song);
-        } else {
-          model = parseRawBlockToSongModel(chordProText || lyricsText, song.id);
-        }
-
-        if (model) {
-          if (!model.title) model.title = song.title;
-          if (!model.key_default) model.key_default = song.key || song.key_default || '';
-          if (!model.capo) model.capo = song.capo || '';
-          if (!model.tempo) model.tempo = song.tempo || '';
-        }
-        song.rawModel = model;
-      }
-
-      // 2. Ensure song is in parsedDocxSongs list for the sidebar
-      if (!parsedDocxSongs.some(s => s.id === song.id)) {
-        parsedDocxSongs.unshift(song);
-      }
-      currentSongIndex = parsedDocxSongs.findIndex(s => s.id === song.id);
-
-      // 3. Switch to Tab 1 (DOCX & OpenSong/ChordPro Студия)
-      const tabBtn = document.querySelector('.tab-btn[data-tab="docx-songs"]');
-      if (tabBtn) tabBtn.click();
-
-      // 4. Update parsed songs UI list
-      renderParsedSongsList();
-
-      // 5. Render song into interactive drag-and-drop editor
-      activeSongModel = model;
-      undoStack = [{ data: JSON.stringify(activeSongModel), desc: 'Open Song ' + song.title, time: Date.now() }];
-      redoStack = [];
-      updateHistoryButtonsUI();
-
-      renderInteractiveEditor(activeSongModel);
-
-      // Scroll to editor smoothly
-      document.getElementById('interactive-editor')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    };
+    // Attach click listeners to songs-table header for sorting
+    document.querySelectorAll('#songs-table thead th[data-sort]').forEach(th => {
+      th.addEventListener('click', () => {
+        const col = th.dataset.sort;
+        if (col) sortCatalogBy(col);
+      });
+    });
 
     window.openEditModal = function(id) {
       const song = dbSongs.find(s => s.id === id);
@@ -4948,10 +4818,11 @@ ${lyricsBody}
 
 
     // ==========================================
-    // 9. SMART AUDIO RENAMER & FUZZY MATCHER
+    // 9. SMART AUDIO RENAMER & INTEGRATED FUZZY MATCHER
     // ==========================================
     let loadedAudioFiles = [];
     let audioMatches = [];
+    let audioFilterMode = 'all'; // 'all' | 'issues'
 
     // Switch between directory picker and file picker
     document.getElementById('link-switch-files-picker')?.addEventListener('click', (e) => {
@@ -4971,7 +4842,7 @@ ${lyricsBody}
 
     const handleAudioFilesSelected = (files) => {
       loadedAudioFiles = [];
-      const validExts = ['.mp3', '.ogg', '.wav', '.m4a'];
+      const validExts = ['.mp3', '.ogg', '.wav', '.m4a', '.flac'];
       for (let i = 0; i < files.length; i++) {
         const f = files[i];
         const lower = f.name.toLowerCase();
@@ -4980,7 +4851,8 @@ ${lyricsBody}
         }
       }
       const log = document.getElementById('audio-rename-log');
-      log.textContent = `[Выбрано файлов]: Обнаружено ${loadedAudioFiles.length} поддерживаемых аудиозаписей (.mp3, .ogg, .wav, .m4a).\nНажмите «1. Сопоставить файлы с песнями» для запуска нестрогого анализа.`;
+      log.textContent = `[Выбрано файлов]: Обнаружено ${loadedAudioFiles.length} аудиозаписей.\nНажмите «1. Проверить файлы и найти расхождения» для запуска комплексного анализа.`;
+      document.getElementById('btn-direct-folder-rename').style.display = 'none';
       document.getElementById('btn-execute-audio-rename').style.display = 'none';
       document.getElementById('audio-matching-container').style.display = 'none';
     };
@@ -4988,40 +4860,156 @@ ${lyricsBody}
     document.getElementById('audio-folder-input')?.addEventListener('change', (e) => handleAudioFilesSelected(e.target.files));
     document.getElementById('audio-files-input')?.addEventListener('change', (e) => handleAudioFilesSelected(e.target.files));
 
-    // Fuzzy matching helpers
-    function cleanAudioTitle(filename) {
-      // Remove extension
-      let name = filename.replace(/\.[^/.]+$/, '');
-      // Remove existing ID prefixes like 0001_альбом_ or 0001_studio_ or 123. or 01 - 
-      name = name.replace(/^\d{1,4}[_\s.-]+(альбом|запись|минус|импро|studio|rehearsal|live|chords)?[_\s.-]*/i, '');
-      name = name.replace(/^\d{1,3}[_\s.-]+/, '');
-      // Replace underscores, dashes with spaces
-      name = name.replace(/[_-]+/g, ' ');
-      // Normalize letters
-      return name.trim().toLowerCase();
+    function normalizeSearchTextAdmin(str) {
+      if (!str) return '';
+      return str.normalize('NFKC').toLowerCase()
+        .replace(/ё/g, 'е')
+        .replace(/[\u2010-\u2015\u2212\-_.,/#!$%^&*;:{}=~\`()?"«»—\[\]]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
     }
 
-    function calculateStringSimilarity(s1, s2) {
-      const a = s1.toLowerCase().replace(/ё/g, 'е').replace(/[^a-zа-я0-9]/g, '');
-      const b = s2.toLowerCase().replace(/ё/g, 'е').replace(/[^a-zа-я0-9]/g, '');
-      if (!a || !b) return 0;
-      if (a === b) return 1.0;
-      if (a.includes(b) || b.includes(a)) return 0.85;
+    function cleanFilenameToTitleVariantsAdmin(filename, defaultBatchType) {
+      let name = filename.replace(/\.(mp3|wav|m4a|ogg|flac)$/i, '').trim();
 
-      // Bigram similarity (Dice coefficient)
-      const getBigrams = str => {
-        const bg = new Set();
-        for (let i = 0; i < str.length - 1; i++) bg.add(str.slice(i, i + 2));
-        return bg;
+      let trackType = defaultBatchType || 'альбом';
+      if (/\b(?:БС|ПБС)[\s\-_0-9]*/i.test(name) || /БС[\-_]/i.test(name)) trackType = 'запись';
+      else if (/\b(?:Р|РЕП)[\s\-_0-9]*/i.test(name) || /Р[\-_]/i.test(name)) trackType = 'запись';
+      else if (/\b(?:К|КВ|концерт|live)[\s\-_0-9]*/i.test(name) || /К[\-_]/i.test(name)) trackType = 'импро';
+      else if (/минус|minus|instrumental/i.test(name)) trackType = 'минус';
+
+      let clean = name
+        .replace(/^[\d]{1,4}[-_\.][\d]{1,4}[-_\.\s]*/, '')
+        .replace(/^[\d]{1,4}[-_\.\s]+/, '')
+        .trim();
+
+      clean = clean
+        .replace(/\b(?:БС|ПБС|К|КВ|Р)[\s\-_0-9]+/gi, ' ')
+        .replace(/БС[-_\s]+[\d\-_]+/gi, ' ')
+        .replace(/К[-_\s]+[\d\-_]+/gi, ' ')
+        .replace(/\b\d{4}[-_]\d{2}[-_]\d{2}\b/g, ' ')
+        .replace(/\b\d{2}\.\d{2}\.\d{4}\b/g, ' ')
+        .replace(/\b\d{4}\s+\d{2}\s+\d{2}\b/g, ' ')
+        .replace(/[\(!%+\?]+\s*[\)!%+\?]*/g, ' ')
+        .replace(/\([^)]*(?:концерт|live|фабрика хвалы|блюз|молитва|мигуны|аккордеон|Артем|СН|СВ|РОЦК|элгитара|драйва|стиха|баяна|медленно|чуть|благодатная)[^)]*\)/gi, ' ')
+        .replace(/-026\s+почти\s+ровно\s+\d+\s+всегда/gi, ' ')
+        .replace(/_/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+      const variants = [clean];
+      const parenMatch = clean.match(/^([^(]+)\s*\(([^)]+)\)/);
+      if (parenMatch) {
+        variants.push(parenMatch[1].trim());
+        variants.push(parenMatch[2].trim());
+      }
+      const plusMatch = clean.match(/^([^+]+)\s*\+\s*(.+)$/);
+      if (plusMatch) {
+        variants.push(plusMatch[1].trim());
+        variants.push(plusMatch[2].trim());
+      }
+
+      return { variants, trackType, cleanTitle: clean };
+    }
+
+    function matchTrackToSongAdmin(filename, songs, defaultBatchType) {
+      if (!filename || !songs || !songs.length) return null;
+      const legacyMatch = filename.match(/^0*([0-9]{1,4})[_-]([a-zA-Z0-9а-яА-ЯёЁ]+)[_-](.*)$/i);
+      if (legacyMatch) {
+        const rawNum = parseInt(legacyMatch[1], 10);
+        const sId = rawNum.toString().padStart(4, '0');
+        const rawNumStr = String(rawNum);
+        const found = songs.find(s => s.id === sId || s.id === rawNumStr || String(s.number) === rawNumStr);
+        if (found) {
+          let rType = legacyMatch[2].toLowerCase();
+          let effType = 'альбом';
+          if (rType.startsWith('альбом') || rType === 'studio') effType = 'альбом';
+          else if (rType.startsWith('запись') || rType === 'rehearsal' || rType.startsWith('rep')) effType = 'запись';
+          else if (rType.startsWith('минус') || rType === 'chords' || rType === 'minus') effType = 'минус';
+          else if (rType.startsWith('импро') || rType === 'live') effType = 'импро';
+          else effType = rType;
+          return { song: found, type: effType, matchMode: 'legacy_id', score: 1000, cleanTitle: legacyMatch[3] };
+        }
+      }
+
+      const { variants, trackType, cleanTitle } = cleanFilenameToTitleVariantsAdmin(filename, defaultBatchType);
+      let bestSong = null;
+      let bestScore = -1;
+
+      for (const v of variants) {
+        const normV = normalizeSearchTextAdmin(v);
+        if (!normV || normV.length < 2) continue;
+        const vWords = normV.split(' ').filter(w => w.length > 2);
+
+        for (const s of songs) {
+          const sNorm = normalizeSearchTextAdmin(s.title);
+          const sAlt = normalizeSearchTextAdmin(s.theme || s.alttheme || s.alt_title || '');
+          const sLyr = normalizeSearchTextAdmin(s.lyrics || s.body_plain || '');
+          if (!sNorm) continue;
+
+          let score = 0;
+          if (normV === sNorm || normV === sAlt) {
+            score = 1000;
+          } else if (normV.startsWith(sNorm) || sNorm.startsWith(normV)) {
+            score = 800;
+          } else if (sNorm.includes(normV) || normV.includes(sNorm)) {
+            score = 650;
+          } else {
+            const sWords = sNorm.split(' ').filter(w => w.length > 2);
+            let common = 0;
+            for (const w of vWords) {
+              if (sWords.includes(w)) common++;
+            }
+            if (common >= 2 && (common === vWords.length || common >= sWords.length * 0.5)) {
+              score = 500 + common * 40;
+            } else if (common === 1 && vWords.length === 1 && sWords.length === 1) {
+              score = 450;
+            } else if (vWords.length >= 2) {
+              if (sLyr.includes(normV)) {
+                score = 480;
+              } else {
+                let lyrMatches = 0;
+                for (const w of vWords) {
+                  if (sLyr.includes(w)) lyrMatches++;
+                }
+                if (lyrMatches >= 2 && lyrMatches === vWords.length) {
+                  score = 450;
+                } else if (lyrMatches >= 2 && lyrMatches >= vWords.length * 0.6) {
+                  score = 400 + lyrMatches * 30;
+                }
+              }
+            } else if (vWords.length === 1 && vWords[0].length >= 4) {
+              if (sWords.some(sw => sw.startsWith(vWords[0]) || vWords[0].startsWith(sw))) {
+                score = 380;
+              }
+            }
+          }
+
+          if (normV.length >= 5 && sNorm.length >= 5) {
+            const subV = normV.slice(0, 7);
+            const subS = sNorm.slice(0, 7);
+            if (subV === subS && score < 600) {
+              score = Math.max(score, 600);
+            }
+          }
+
+          if (score > bestScore) {
+            bestScore = score;
+            bestSong = s;
+          }
+        }
+      }
+
+      return {
+        song: bestSong,
+        type: trackType,
+        matchMode: 'fuzzy',
+        score: Math.max(0, bestScore),
+        cleanTitle
       };
-      const b1 = getBigrams(a);
-      const b2 = getBigrams(b);
-      let intersection = 0;
-      b1.forEach(item => { if (b2.has(item)) intersection++; });
-      return (2.0 * intersection) / (b1.size + b2.size);
     }
 
-    // Run matching
+    // Run matching analysis
     document.getElementById('btn-analyze-audio-matching')?.addEventListener('click', () => {
       const log = document.getElementById('audio-rename-log');
       if (loadedAudioFiles.length === 0) {
@@ -5029,77 +5017,96 @@ ${lyricsBody}
         return;
       }
 
-      const recType = document.getElementById('audio-batch-type-select').value;
+      const defaultBatchType = document.getElementById('audio-batch-type-select').value;
       audioMatches = [];
-      log.textContent = `[Анализ]: Сопоставление ${loadedAudioFiles.length} файлов с каталогом песен (${dbSongs.length} наименований)...\n`;
+      log.textContent = `[Анализ]: Сканирование ${loadedAudioFiles.length} файлов и сопоставление с реестром песен (${dbSongs.length} наименований)...\n`;
 
       let highConfidence = 0;
+      let issuesCount = 0;
 
       loadedAudioFiles.forEach((file, fIdx) => {
-        const cleanedFileName = cleanAudioTitle(file.name);
-        let bestSong = null;
-        let bestScore = 0;
-
-        dbSongs.forEach(s => {
-          const sTitle = s.title || '';
-          const sAlt = s.alt_title || '';
-          const scoreTitle = calculateStringSimilarity(cleanedFileName, sTitle);
-          const scoreAlt = sAlt ? calculateStringSimilarity(cleanedFileName, sAlt) : 0;
-          const maxScore = Math.max(scoreTitle, scoreAlt);
-
-          if (maxScore > bestScore) {
-            bestScore = maxScore;
-            bestSong = s;
-          }
-        });
-
-        // Determine proposed new name: 0001_studio_Title.ext
+        const match = matchTrackToSongAdmin(file.name, dbSongs, defaultBatchType);
         const ext = file.name.slice(file.name.lastIndexOf('.'));
-        let newName = '';
-        if (bestSong && bestScore >= 0.25) {
-          const songId = String(bestSong.id).padStart(4, '0');
-          // Clean original name without old prefix
-          const baseName = file.name.slice(0, file.name.lastIndexOf('.')).replace(/^\d{1,4}[_\s.-]+(альбом|запись|минус|импро|studio|rehearsal|live|chords)?[_\s.-]*/i, '');
-          newName = `${songId}_${recType}_${baseName}${ext}`;
-          if (bestScore >= 0.6) highConfidence++;
+        const bestSong = match ? match.song : null;
+        const score = match ? match.score : 0;
+        const trackType = match ? match.type : defaultBatchType;
+
+        // Понятное каноническое имя трека
+        let proposedTitle = '';
+        if (bestSong) {
+          proposedTitle = `${bestSong.title || file.name.replace(/\.[^/.]+$/, '')}`;
         } else {
-          newName = `_____${recType}_${file.name}`;
+          proposedTitle = match ? (match.cleanTitle || file.name.replace(/\.[^/.]+$/, '')) : file.name.replace(/\.[^/.]+$/, '');
+        }
+
+        let proposedName = '';
+        if (bestSong && score >= 350) {
+          const sId = String(bestSong.id).padStart(4, '0');
+          // Если трек типа "альбом" — чистое название песни с ID, если другой тип — с указанием типа
+          if (trackType === 'альбом') {
+            proposedName = `${sId} - ${bestSong.title}${ext}`;
+          } else {
+            proposedName = `${sId} - ${bestSong.title} (${trackType})${ext}`;
+          }
+          if (score >= 600) highConfidence++;
+          else issuesCount++;
+        } else {
+          proposedName = `[НЕ ОПОЗНАНО] ${file.name}`;
+          issuesCount++;
         }
 
         audioMatches.push({
           index: fIdx,
           file,
-          cleanedFileName,
           bestSong,
-          score: bestScore,
-          recType,
-          newName,
-          checked: bestScore >= 0.3
+          score,
+          trackType,
+          isIssue: (!bestSong || score < 600),
+          proposedName,
+          customName: proposedName,
+          checked: !!bestSong && score >= 350
         });
       });
 
-      renderAudioMatchingTable();
+      log.textContent += `[Результат]: Успешно сопоставлено: ${loadedAudioFiles.length - issuesCount} файлов. Расхождений / требуют проверки: ${issuesCount}.\n`;
       document.getElementById('btn-direct-folder-rename').style.display = 'inline-flex';
       document.getElementById('btn-execute-audio-rename').style.display = 'inline-flex';
-      log.textContent += `[Готово]: Анализ завершен! Сопоставлено: ${audioMatches.length} файлов (высокая точность: ${highConfidence}).\nПроверьте предложенные имена и нажмите «2. Скачать переименованные файлы (ZIP)».\n`;
+
+      renderAudioMatchesTable();
     });
 
-    function renderAudioMatchingTable() {
+    function renderAudioMatchesTable() {
       const tbody = document.getElementById('audio-rename-tbody');
       const container = document.getElementById('audio-matching-container');
       const stats = document.getElementById('audio-matching-stats');
       tbody.innerHTML = '';
       container.style.display = 'block';
 
-      const matchedCount = audioMatches.filter(m => m.bestSong && m.score >= 0.3).length;
-      stats.innerHTML = `Сопоставлено песен: <span style="color: var(--primary);">${matchedCount}</span> из ${audioMatches.length} файлов (Тип: <code>${document.getElementById('audio-batch-type-select').value}</code>)`;
+      const totalCount = audioMatches.length;
+      const issuesCount = audioMatches.filter(m => m.isIssue).length;
+      const okCount = totalCount - issuesCount;
 
-      audioMatches.forEach((m) => {
+      stats.innerHTML = `Всего файлов: <strong>${totalCount}</strong> | Точно распознано: <span style="color: #16a34a; font-weight: 700;">${okCount}</span> | Расхождений: <span style="color: #dc2626; font-weight: 700;">${issuesCount}</span>`;
+
+      const visibleMatches = audioMatches.filter(m => {
+        if (audioFilterMode === 'issues') return m.isIssue;
+        return true;
+      });
+
+      visibleMatches.forEach((m) => {
         const tr = document.createElement('tr');
-        const scorePct = Math.round(m.score * 100);
-        let badgeColor = '#2e7d32';
-        if (scorePct < 40) badgeColor = '#c62828';
-        else if (scorePct < 70) badgeColor = '#f57c00';
+        if (m.isIssue) {
+          tr.style.background = '#fef2f2';
+        }
+
+        let badgeHtml = '';
+        if (!m.bestSong || m.score < 350) {
+          badgeHtml = '<span class="badge" style="background: #dc2626; color: #fff;">Не найдено</span>';
+        } else if (m.score < 600) {
+          badgeHtml = '<span class="badge" style="background: #ea580c; color: #fff;">Сомнение</span>';
+        } else {
+          badgeHtml = '<span class="badge" style="background: #16a34a; color: #fff;">✓ Точно</span>';
+        }
 
         tr.innerHTML = `
           <td style="text-align: center;">
@@ -5108,132 +5115,150 @@ ${lyricsBody}
           <td style="font-family: monospace; font-size: 0.8rem; word-break: break-all;">
             ${m.file.name}
           </td>
-          <td>
-            <span class="badge" style="background: ${badgeColor}; color: #fff;">${scorePct}%</span>
+          <td style="text-align: center;">
+            ${badgeHtml}
           </td>
           <td>
             <select class="form-control audio-song-selector" data-index="${m.index}" style="font-size: 0.8rem; padding: 0.25rem 0.5rem; font-weight: 600;">
               <option value="">-- Не выбрано / Не сопоставлено --</option>
               ${dbSongs.map(s => {
-                const isSel = m.bestSong && m.bestSong.id === s.id ? 'selected' : '';
+                const isSel = m.bestSong && String(m.bestSong.id) === String(s.id) ? 'selected' : '';
                 return `<option value="${s.id}" ${isSel}>#${s.id} — ${s.title}</option>`;
               }).join('')}
             </select>
           </td>
           <td>
-            <input type="text" class="form-control audio-newname-input" data-index="${m.index}" value="${m.newName}" style="font-family: monospace; font-size: 0.8rem; font-weight: 700; color: #1e3a8a;">
+            <input type="text" class="form-control audio-newname-input" data-index="${m.index}" value="${m.customName}" style="font-family: monospace; font-size: 0.8rem; font-weight: 700; color: #1e3a8a;">
           </td>
         `;
         tbody.appendChild(tr);
       });
 
-      // Hook song selector change to update newName dynamically
+      // Hook song selector change to update proposed/custom name dynamically
       tbody.querySelectorAll('.audio-song-selector').forEach(sel => {
         sel.addEventListener('change', (e) => {
           const idx = parseInt(e.target.dataset.index, 10);
           const sid = e.target.value;
           const m = audioMatches[idx];
-          const recType = document.getElementById('audio-batch-type-select').value;
           const ext = m.file.name.slice(m.file.name.lastIndexOf('.'));
-          const s = dbSongs.find(x => x.id === sid);
+          const s = dbSongs.find(x => String(x.id) === String(sid));
 
           if (s) {
             m.bestSong = s;
-            const songId = String(s.id).padStart(4, '0');
-            const baseName = m.file.name.slice(0, m.file.name.lastIndexOf('.')).replace(/^\d{1,4}[_\s.-]+(альбом|запись|минус|импро|studio|rehearsal|live|chords)?[_\s.-]*/i, '');
-            m.newName = `${songId}_${recType}_${baseName}${ext}`;
+            m.isIssue = false;
             m.checked = true;
+            const sId = String(s.id).padStart(4, '0');
+            if (m.trackType === 'альбом') {
+              m.customName = `${sId} - ${s.title}${ext}`;
+            } else {
+              m.customName = `${sId} - ${s.title} (${m.trackType})${ext}`;
+            }
           } else {
             m.bestSong = null;
-            m.newName = `_____${recType}_${m.file.name}`;
+            m.isIssue = true;
+            m.customName = `[НЕ ОПОЗНАНО] ${m.file.name}`;
           }
 
-          const row = e.target.closest('tr');
-          row.querySelector('.audio-newname-input').value = m.newName;
-          row.querySelector('.audio-match-check').checked = m.checked;
+          renderAudioMatchesTable();
+        });
+      });
+
+      // Hook direct edits in input
+      tbody.querySelectorAll('.audio-newname-input').forEach(inp => {
+        inp.addEventListener('input', (e) => {
+          const idx = parseInt(e.target.dataset.index, 10);
+          audioMatches[idx].customName = e.target.value.trim();
+        });
+      });
+
+      tbody.querySelectorAll('.audio-match-check').forEach(cb => {
+        cb.addEventListener('change', (e) => {
+          const idx = parseInt(e.target.dataset.index, 10);
+          audioMatches[idx].checked = e.target.checked;
         });
       });
     }
 
+    document.getElementById('btn-filter-audio-all')?.addEventListener('click', () => {
+      audioFilterMode = 'all';
+      document.getElementById('btn-filter-audio-all').classList.add('active');
+      document.getElementById('btn-filter-audio-issues').classList.remove('active');
+      renderAudioMatchesTable();
+    });
+
+    document.getElementById('btn-filter-audio-issues')?.addEventListener('click', () => {
+      audioFilterMode = 'issues';
+      document.getElementById('btn-filter-audio-issues').classList.add('active');
+      document.getElementById('btn-filter-audio-all').classList.remove('active');
+      renderAudioMatchesTable();
+    });
+
     document.getElementById('audio-rename-master-check')?.addEventListener('change', (e) => {
-      const state = e.target.checked;
-      document.querySelectorAll('.audio-match-check').forEach(cb => cb.checked = state);
-      audioMatches.forEach(m => m.checked = state);
+      const isChecked = e.target.checked;
+      audioMatches.forEach(m => m.checked = isChecked);
+      document.querySelectorAll('.audio-match-check').forEach(cb => cb.checked = isChecked);
     });
 
     document.getElementById('btn-reset-audio-matching')?.addEventListener('click', () => {
       loadedAudioFiles = [];
       audioMatches = [];
       document.getElementById('audio-matching-container').style.display = 'none';
+      document.getElementById('btn-direct-folder-rename').style.display = 'none';
       document.getElementById('btn-execute-audio-rename').style.display = 'none';
-      document.getElementById('audio-folder-input').value = '';
-      document.getElementById('audio-files-input').value = '';
       document.getElementById('audio-rename-log').textContent = '[Ожидание выбора папки с аудиофайлами...]';
     });
 
-    // Execute renaming and ZIP packing
-    
-    // DIRECT LIVE FOLDER RENAMING WITHOUT ZIP (File System Access API)
+    // Прямое переименование на лету в выбранной папке
     document.getElementById('btn-direct-folder-rename')?.addEventListener('click', async () => {
       const log = document.getElementById('audio-rename-log');
-      const checks = document.querySelectorAll('.audio-match-check:checked');
-      if (checks.length === 0) {
+      const approved = audioMatches.filter(m => m.checked);
+      if (approved.length === 0) {
         alert('Выберите хотя бы один файл для переименования');
         return;
       }
 
       if (!('showDirectoryPicker' in window)) {
-        alert('Ваш браузер не поддерживает прямое переименование файлов на диске (File System Access API).\nИспользуйте кнопку «Скачать переименованные (ZIP)».');
-        document.getElementById('btn-direct-folder-rename').style.display = 'inline-flex';
-      document.getElementById('btn-execute-audio-rename').style.display = 'inline-flex';
+        alert('Ваш браузер не поддерживает прямое переименование файлов на диске (File System Access API).\nИспользуйте кнопку «Скачать утверждённые файлы (ZIP)».');
         return;
       }
 
       try {
-        log.textContent += `[Выбор папки]: Пожалуйста, укажите ту же папку на диске для выдачи прав на переименование...\n`;
+        log.textContent += `[Выбор папки]: Укажите папку на диске для выдачи прав на переименование...\n`;
         const dirHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
         let renamedCount = 0;
-        const recType = document.getElementById('audio-batch-type-select').value;
 
-        for (const cb of checks) {
-          const idx = parseInt(cb.dataset.index, 10);
-          const m = audioMatches[idx];
-          const row = cb.closest('tr');
-          const customName = row.querySelector('.audio-newname-input').value.trim() || m.newName;
-
+        for (const m of approved) {
+          const customName = m.customName;
           if (m.file.name === customName) continue;
 
           try {
-            // Get original file handle
             const origFileHandle = await dirHandle.getFileHandle(m.file.name);
             const origFile = await origFileHandle.getFile();
 
-            // Create new file with renamed title
             const newFileHandle = await dirHandle.getFileHandle(customName, { create: true });
             const writable = await newFileHandle.createWritable();
             await writable.write(await origFile.arrayBuffer());
             await writable.close();
 
-            // Delete old file
             await dirHandle.removeEntry(m.file.name);
             renamedCount++;
 
             log.textContent += `  ✓ Переименован: ${m.file.name} -> ${customName}\n`;
 
-            // Update registered audio catalog in admin
+            // Регистрация в базе аудио
             if (m.bestSong) {
-              const existingIdx = dbAudio.findIndex(a => a.filename === customName || (a.song_id === m.bestSong.id && a.type === recType));
+              const existingIdx = dbAudio.findIndex(a => a.filename === customName || (a.song_id === m.bestSong.id && a.type === m.trackType));
               const entry = {
                 song_id: m.bestSong.id,
-                type: recType,
-                label: recType === 'альбом' ? 'Студийный релиз (оригинал)' : (recType === 'импро' ? 'Концертная запись' : 'Репетиция'),
+                type: m.trackType,
+                label: m.bestSong.title || 'Аудиозапись',
                 filename: customName
               };
               if (existingIdx !== -1) dbAudio[existingIdx] = entry;
               else dbAudio.push(entry);
             }
           } catch (fileErr) {
-            log.textContent += `  [Предупреждение] Не удалось переименовать ${m.file.name}: ${fileErr.message}\n`;
+            log.textContent += `  ✕ Не удалось переименовать ${m.file.name}: ${fileErr.message}\n`;
           }
         }
 
@@ -5245,43 +5270,38 @@ ${lyricsBody}
 
       } catch (err) {
         if (err.name !== 'AbortError') {
-          log.textContent += `[Ошибка доступа к папке]: ${err.message}\n`;
+          log.textContent += `[Ошибка доступа]: ${err.message}\n`;
           alert('Ошибка доступа к папке: ' + err.message);
         }
       }
     });
 
-document.getElementById('btn-execute-audio-rename')?.addEventListener('click', async () => {
+    // Скачивание архивом утверждённых файлов
+    document.getElementById('btn-execute-audio-rename')?.addEventListener('click', async () => {
       const log = document.getElementById('audio-rename-log');
-      const checks = document.querySelectorAll('.audio-match-check:checked');
-      if (checks.length === 0) {
+      const approved = audioMatches.filter(m => m.checked);
+      if (approved.length === 0) {
         alert('Выберите хотя бы один файл для переименования');
         return;
       }
 
-      const recType = document.getElementById('audio-batch-type-select').value;
-      log.textContent += `[Упаковка ZIP]: Подготовка архива с переименованными файлами...\n`;
+      log.textContent += `[Упаковка ZIP]: Подготовка архива с утверждёнными файлами...\n`;
 
       try {
         const zip = new JSZip();
         let count = 0;
 
-        for (const cb of checks) {
-          const idx = parseInt(cb.dataset.index, 10);
-          const m = audioMatches[idx];
-          const row = cb.closest('tr');
-          const customName = row.querySelector('.audio-newname-input').value.trim() || m.newName;
-
+        for (const m of approved) {
+          const customName = m.customName;
           zip.file(customName, m.file);
           count++;
 
-          // Also register in dbAudio registry if matched
           if (m.bestSong) {
-            const existingIdx = dbAudio.findIndex(a => a.filename === customName || a.song_id === m.bestSong.id && a.type === recType);
+            const existingIdx = dbAudio.findIndex(a => a.filename === customName || (a.song_id === m.bestSong.id && a.type === m.trackType));
             const entry = {
               song_id: m.bestSong.id,
-              type: recType,
-              label: recType === 'studio' ? 'Студийная фонограмма' : (recType === 'live' ? 'Концертная запись' : 'Репетиция'),
+              type: m.trackType,
+              label: m.bestSong.title || 'Аудиозапись',
               filename: customName
             };
             if (existingIdx !== -1) dbAudio[existingIdx] = entry;
@@ -5299,7 +5319,7 @@ document.getElementById('btn-execute-audio-rename')?.addEventListener('click', a
           }
         });
 
-        const zipFilename = `audio_renamed_${recType}_${formatBackupTimestamp()}.zip`;
+        const zipFilename = `audio_approved_${formatBackupTimestamp()}.zip`;
         const a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
         a.download = zipFilename;
@@ -5307,7 +5327,7 @@ document.getElementById('btn-execute-audio-rename')?.addEventListener('click', a
         a.click();
         document.body.removeChild(a);
 
-        log.textContent += `[УСПЕХ]: Архив «${zipFilename}» успешно сформирован и скачан! Переименовано ${count} файлов. Реестр аудио обновлен.\n`;
+        log.textContent += `[УСПЕХ]: Архив «${zipFilename}» успешно сформирован и скачан!\n`;
         alert(`Успешно переименовано и упаковано в архив ${count} аудиозаписей!`);
 
       } catch (err) {
@@ -5316,10 +5336,6 @@ document.getElementById('btn-execute-audio-rename')?.addEventListener('click', a
       }
     });
 
-
-    // ==========================================
-    
-    // ==========================================
     // СЛИЯНИЕ ЗАМЕТОК МУЗЫКАНТОВ В songs.csv
     // ==========================================
     document.getElementById('btn-merge-musician-notes')?.addEventListener('click', async () => {

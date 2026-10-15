@@ -1702,6 +1702,90 @@
       border-top: 1px solid #e5e7eb !important;
     }
 
+
+    /* МОБИЛЬНЫЙ ТАЧ-РЕДАКТОР АККОРДОВ И СВОЙСТВ ПЕСНИ */
+    .editor-line-block {
+      margin-bottom: 0.85rem;
+      position: relative;
+    }
+    .editor-line-header {
+      font-size: 0.72rem;
+      font-weight: 700;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      margin-bottom: 0.2rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .editor-line-track {
+      position: relative;
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      padding: 1.85rem 0.5rem 0.5rem 0.5rem;
+      min-height: 52px;
+      user-select: none;
+      touch-action: pan-y;
+      overflow-x: auto;
+    }
+    .editor-text-row {
+      display: inline-block;
+      white-space: pre;
+      position: relative;
+      font-family: inherit;
+      font-size: 0.95rem;
+      line-height: 1.4;
+    }
+    .char-cell {
+      display: inline-block;
+      position: relative;
+      cursor: pointer;
+      min-width: 0.5em;
+    }
+    .char-cell.snap-target {
+      background: #fed7aa;
+      border-radius: 2px;
+    }
+    .chord-chip {
+      position: absolute;
+      top: 0.2rem;
+      transform: translateX(-50%);
+      background: var(--chord-color, #c2410c);
+      color: #fff;
+      font-size: 0.75rem;
+      font-weight: 700;
+      padding: 0.15rem 0.45rem;
+      border-radius: 4px;
+      cursor: grab;
+      touch-action: none;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.25);
+      z-index: 5;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.25rem;
+      user-select: none;
+    }
+    .chord-chip:active {
+      cursor: grabbing;
+      transform: translateX(-50%) scale(1.08);
+      z-index: 10;
+    }
+    .chord-chip.selected {
+      outline: 2px solid #0284c7;
+      outline-offset: 1px;
+    }
+    .chord-chip .btn-chip-del {
+      cursor: pointer;
+      font-size: 0.8rem;
+      padding: 0 0.15rem;
+      opacity: 0.8;
+    }
+    .mobile-prop-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+      gap: 0.6rem;
+    }
 </style>
   <!-- ТИПОГРАФИКА: Golos Text (Bold) для интерфейса и аккордов, Golos UI (Medium) для текста песен -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -1744,7 +1828,10 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
       <span>Списки</span>
     </button>
-    
+    <button class="nav-item" data-action="nav-tab" data-tab="editor">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+      <span>Редактор</span>
+    </button>
     <button class="nav-item" data-action="nav-tab" data-tab="settings">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
       <span>Опции</span>
@@ -10458,9 +10545,9 @@ async handleBatchAudioUpload(files) {
     } else if (state.currentTab === 'playlists') {
       pageTitle.textContent = 'Управление Списками';
       this.renderPlaylistsView(main, headerActions);
-    } else if (state.currentTab === 'player') {
-      pageTitle.textContent = 'Студийный Плеер';
-      this.renderDedicatedPlayerView(main);
+    } else if (state.currentTab === 'editor') {
+      pageTitle.textContent = 'Редактор Песен (Touch/OpenSong)';
+      this.renderSongEditorView(main);
     } else if (state.currentTab === 'settings') {
       pageTitle.textContent = 'Опции и Заметки';
       this.renderSettingsView(main);
@@ -11376,388 +11463,600 @@ async handleBatchAudioUpload(files) {
     container.appendChild(wrap);
   }
 
-  renderDedicatedPlayerView(container) {
+  renderSongEditorView(container) {
     container.innerHTML = '';
     const state = store.getState();
+    const songs = state.songs || [];
 
-    const studioLayout = Renderer.createElement('div', { className: 'player-studio-layout' });
-
-    const leftCard = Renderer.createElement('div', { className: 'player-now-playing-card' });
-    // Всегда отдаем наивысший приоритет актуальному воспроизводимому треку (audioPlayer.currentTrack или state.activeAudio)
-    const activeTrack = audioPlayer.currentTrack || state.activeAudio;
-    let curTrack = activeTrack;
-    if (!curTrack && audioPlayer.playlistQueue && audioPlayer.playlistQueue.length > 0) {
-      curTrack = audioPlayer.playlistQueue[audioPlayer.currentIndex >= 0 ? audioPlayer.currentIndex : 0];
-    }
-    if (!curTrack && state.audio && state.audio.length > 0) {
-      curTrack = state.audio[0];
+    if (!window._activeEditSongId) {
+      window._activeEditSongId = state.currentSongId || (songs.length > 0 ? songs[0].id : null);
     }
 
-    // Если у curTrack ещё нет coverUrl или стоит дефолтная, проверяем активный трек или кэш state.audio
-    if (curTrack) {
-      const cached = state.audio && state.audio.find(a => (a.id === curTrack.id) || (curTrack.filename && a.filename === curTrack.filename));
-      if (cached && cached.coverUrl && !cached.coverUrl.startsWith('data:image/svg')) {
-        curTrack.coverUrl = cached.coverUrl;
-      }
+    const curSong = songs.find(s => s.id === window._activeEditSongId) || songs[0];
+    if (!curSong) {
+      container.appendChild(Renderer.createElement('div', { className: 'empty-state-card' }, ['Каталог песен пуст']));
+      return;
     }
 
-    const parentSong = curTrack ? state.songs.find(s => s.id === curTrack.song_id) : null;
-
-    const effectiveCover = (curTrack && curTrack.coverUrl && !curTrack.coverUrl.startsWith('data:image/svg')) 
-      ? curTrack.coverUrl 
-      : ((activeTrack && activeTrack.coverUrl && !activeTrack.coverUrl.startsWith('data:image/svg')) ? activeTrack.coverUrl : (typeof DEFAULT_ALBUM_COVER_BASE64 !== 'undefined' ? DEFAULT_ALBUM_COVER_BASE64 : ''));
-
-    const cover = Renderer.createElement('div', {
-      className: 'player-album-cover',
-      style: 'position: relative; overflow: hidden; background: #ffffff; padding: 0.5rem; border: 1px solid var(--border-color);'
-    });
-    const coverImg = Renderer.createElement('img', {
-      id: 'player-dedicated-cover-img',
-      src: effectiveCover,
-      alt: 'Обложка трека',
-      style: 'width: 100%; height: 100%; object-fit: contain; border-radius: 0.6rem;'
-    });
-    cover.appendChild(coverImg);
-
-    // Асинхронная гарантированная догрузка обложки в студийный плеер, если обложка еще не извлечена
-    if (curTrack && (!curTrack.coverUrl || curTrack.coverUrl === DEFAULT_ALBUM_COVER_BASE64)) {
-      const curFname = curTrack.filename || (curTrack.path ? curTrack.path.split('/').pop() : '');
-      (async () => {
-        try {
-          let b = (curFname && window._audioFilesRegistry && window._audioFilesRegistry.get(curFname)) || (curFname && await storage.getAudioBlob(curFname));
-          if (!b) {
-            const candList = [];
-            if (curTrack.url) candList.push(curTrack.url);
-            if (curFname) {
-              candList.push('music/' + curFname);
-              candList.push('./music/' + curFname);
-              candList.push('music/' + encodeURIComponent(curFname));
-              candList.push('./music/' + encodeURIComponent(curFname));
-            }
-            for (const u of candList) {
-              try {
-                const r = await fetch(u);
-                if (r.ok) { b = await r.blob(); break; }
-              } catch(e) {}
-            }
-          }
-          if (b) {
-            const extracted = await Id3ArtworkHelper.extractCoverFromBlob(b);
-            if (extracted) {
-              curTrack.coverUrl = extracted;
-              if (activeTrack && (activeTrack.id === curTrack.id || activeTrack.filename === curTrack.filename)) {
-                activeTrack.coverUrl = extracted;
-              }
-              const pImg = document.getElementById('player-dedicated-cover-img');
-              if (pImg) pImg.src = extracted;
-              const dImg = document.getElementById('docked-cover-img');
-              if (dImg) {
-                dImg.src = extracted;
-                dImg.style.display = 'block';
-                const dPh = document.getElementById('docked-cover-placeholder');
-                if (dPh) dPh.style.display = 'none';
-              }
-            }
-          }
-        } catch(e) {}
-      })();
+    // Parse model if not parsed or song changed
+    if (!window._activeEditModel || window._activeEditModelSongId !== curSong.id) {
+      window._activeEditModel = this.buildSongEditorModel(curSong);
+      window._activeEditModelSongId = curSong.id;
     }
 
-    if (curTrack) {
-      const normType = Renderer.normalizeAudioType(curTrack.type);
-      const typeBadge = Renderer.createElement('span', {
-        className: 'player-cover-badge ' + Renderer.getTypeBadgeClass(normType),
-        style: 'font-weight: 800; font-size: 0.8rem; text-transform: uppercase; padding: 3px 8px; border-radius: 6px; box-shadow: 0 2px 6px rgba(0,0,0,0.15);'
-      }, [
-        normType
-      ]);
-      cover.appendChild(typeBadge);
-    }
-    leftCard.appendChild(cover);
+    const model = window._activeEditModel;
+    const wrap = Renderer.createElement('div', { className: 'flex', style: 'flex-direction: column; gap: 1rem; padding-bottom: 2rem;' });
 
-    const trackDetails = Renderer.createElement('div', {
-      className: 'player-track-details',
-      style: 'width: 100%; max-width: 100%; overflow: hidden; box-sizing: border-box; text-align: center;'
+    // 1. ВЫБОР ПЕСНИ СВЕРХУ
+    const selectorCard = Renderer.createElement('div', { className: 'song-card', style: 'flex-direction: column; gap: 0.5rem;' });
+    selectorCard.appendChild(Renderer.createElement('label', { style: 'font-size: 0.75rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase;' }, ['Выберите песню для редактирования:']));
+
+    const songSelect = Renderer.createElement('select', {
+      className: 'input-select w-full',
+      style: 'font-weight: 700; font-size: 0.95rem;'
     });
-    // В player-track-main-title надо писать название трека из базы (по ID)
-    // В player-track-main-title не выводить номер, только название песни по ID
-    const dbSongTitle = parentSong ? parentSong.title : (curTrack ? (curTrack.label || 'Фонограмма') : 'Трек не выбран');
-    trackDetails.appendChild(Renderer.createElement('h2', { className: 'player-track-main-title' }, [
-      dbSongTitle
-    ]));
-    // В player-track-artist-album выводить имя файла (filename) и альбом из метаданных mp3
-    // В player-track-artist-album выводить имя файла
-    const albumPrefix = (curTrack && curTrack.album && curTrack.album !== 'Сборник') ? ('[' + curTrack.album + '] ') : '';
-    const fileSubtitle = curTrack ? (albumPrefix + (curTrack.filename || curTrack.label || '—')) : '—';
-    trackDetails.appendChild(Renderer.createElement('div', { className: 'player-track-artist-album' }, [
-      fileSubtitle
-    ]));
-    leftCard.appendChild(trackDetails);
-
-    const timelineWrap = Renderer.createElement('div', {
-      className: 'player-timeline-wrap',
-      style: 'width: 100%; box-sizing: border-box;'
+    songs.forEach(s => {
+      const opt = Renderer.createElement('option', { value: s.id }, ['#' + s.id + ' — ' + s.title]);
+      if (s.id === curSong.id) opt.selected = true;
+      songSelect.appendChild(opt);
     });
-    const timelineBar = Renderer.createElement('div', {
-      className: 'player-timeline-bar',
-      id: 'main-player-bar',
-      dataset: { action: 'main-player-seek' }
+    songSelect.addEventListener('change', (e) => {
+      window._activeEditSongId = e.target.value;
+      window._activeEditModel = null;
+      this.renderSongEditorView(container);
     });
-    const fill = Renderer.createElement('div', { className: 'player-timeline-fill', id: 'main-player-fill' });
-    if (state.duration > 0) fill.style.width = ((state.currentTime / state.duration) * 100) + '%';
-    timelineBar.appendChild(fill);
-    timelineWrap.appendChild(timelineBar);
+    selectorCard.appendChild(songSelect);
+    wrap.appendChild(selectorCard);
 
-    const timestamps = Renderer.createElement('div', { className: 'player-timestamps' }, [
-      Renderer.createElement('span', { id: 'player-cur-time' }, [AudioPlayerService.formatTime(state.currentTime)]),
-      Renderer.createElement('span', { id: 'player-dur-time' }, [AudioPlayerService.formatTime(state.duration)])
-    ]);
-    timelineWrap.appendChild(timestamps);
-    leftCard.appendChild(timelineWrap);
-
-    const controls = Renderer.createElement('div', { className: 'player-controls-row' });
-
-    // Кнопка случайного порядка
-    const shuffleBtn = Renderer.createElement('button', {
-      className: 'player-btn-action ' + (audioPlayer.isShuffle ? 'active' : ''),
-      id: 'player-btn-shuffle',
-      dataset: { action: 'player-toggle-shuffle' },
-      title: audioPlayer.isShuffle ? 'Случайный порядок (вкл)' : 'По порядку'
-    }, [
-      Renderer.createElement('svg', {
-        viewBox: '0 0 24 24',
-        width: '24',
-        height: '24',
-        fill: 'none',
-        stroke: 'currentColor',
-        'stroke-width': '2.5',
-        'stroke-linecap': 'round',
-        'stroke-linejoin': 'round'
-      }, [
-        Renderer.createElement('polyline', { points: '16 3 21 3 21 8' }),
-        Renderer.createElement('line', { x1: '4', y1: '20', x2: '21', y2: '3' }),
-        Renderer.createElement('polyline', { points: '21 16 21 21 16 21' }),
-        Renderer.createElement('line', { x1: '15', y1: '15', x2: '21', y2: '21' }),
-        Renderer.createElement('line', { x1: '4', y1: '4', x2: '9', y2: '9' })
-      ])
-    ]);
-    controls.appendChild(shuffleBtn);
-
-    // Предыдущий трек
-    const prevBtn = Renderer.createElement('button', {
-      className: 'player-btn-action',
-      dataset: { action: 'player-prev-track' },
-      title: 'Предыдущий трек'
-    }, [
-      Renderer.createElement('svg', {
-        viewBox: '0 0 24 24',
-        width: '24',
-        height: '24',
-        fill: 'none',
-        stroke: 'currentColor',
-        'stroke-width': '2.5',
-        'stroke-linecap': 'round',
-        'stroke-linejoin': 'round'
-      }, [
-        Renderer.createElement('polygon', { points: '19 20 9 12 19 4 19 20', fill: 'currentColor' }),
-        Renderer.createElement('line', { x1: '5', y1: '19', x2: '5', y2: '5' })
-      ])
-    ]);
-    controls.appendChild(prevBtn);
-
-    // Главная кнопка Воспроизведение / Пауза
-    const playBtn = Renderer.createElement('button', {
-      className: 'btn-play-circle',
-      id: 'main-play-btn',
-      dataset: { action: 'player-toggle-play' },
-      title: 'Воспроизведение / Пауза'
-    }, [
-      Renderer.createElement('svg', {
-        id: 'main-play-icon',
-        className: state.isPlaying ? 'hidden' : '',
-        viewBox: '0 0 24 24',
-        width: '32',
-        height: '32',
-        fill: '#ffffff',
-        stroke: '#ffffff'
-      }, [
-        Renderer.createElement('polygon', { points: '6 4 20 12 6 20 6 4', fill: '#ffffff' })
-      ]),
-      Renderer.createElement('svg', {
-        id: 'main-pause-icon',
-        className: !state.isPlaying ? 'hidden' : '',
-        viewBox: '0 0 24 24',
-        width: '32',
-        height: '32',
-        fill: '#ffffff',
-        stroke: '#ffffff'
-      }, [
-        Renderer.createElement('rect', { x: '6', y: '4', width: '4', height: '16', fill: '#ffffff' }),
-        Renderer.createElement('rect', { x: '14', y: '4', width: '4', height: '16', fill: '#ffffff' })
-      ])
-    ]);
-    controls.appendChild(playBtn);
-
-    // Следующий трек
-    const nextBtn = Renderer.createElement('button', {
-      className: 'player-btn-action',
-      dataset: { action: 'player-next-track' },
-      title: 'Следующий трек'
-    }, [
-      Renderer.createElement('svg', {
-        viewBox: '0 0 24 24',
-        width: '24',
-        height: '24',
-        fill: 'none',
-        stroke: 'currentColor',
-        'stroke-width': '2.5',
-        'stroke-linecap': 'round',
-        'stroke-linejoin': 'round'
-      }, [
-        Renderer.createElement('polygon', { points: '5 4 15 12 5 20 5 4', fill: 'currentColor' }),
-        Renderer.createElement('line', { x1: '19', y1: '5', x2: '19', y2: '19' })
-      ])
-    ]);
-    controls.appendChild(nextBtn);
-
-    // Кнопка поделиться треком/песней (штатное системное меню телефона)
-    const shareBtn = Renderer.createElement('button', {
-      className: 'player-btn-action',
-      dataset: { action: 'player-share-current-song' },
-      title: 'Поделиться песней (в мессенджеры)'
-    }, [
-      Renderer.createElement('svg', {
-        viewBox: '0 0 24 24',
-        width: '24',
-        height: '24',
-        fill: 'none',
-        stroke: 'currentColor',
-        'stroke-width': '2.2',
-        'stroke-linecap': 'round',
-        'stroke-linejoin': 'round'
-      }, [
-        Renderer.createElement('circle', { cx: '18', cy: '5', r: '3' }),
-        Renderer.createElement('circle', { cx: '6', cy: '12', r: '3' }),
-        Renderer.createElement('circle', { cx: '18', cy: '19', r: '3' }),
-        Renderer.createElement('line', { x1: '8.59', y1: '13.51', x2: '15.42', y2: '17.49' }),
-        Renderer.createElement('line', { x1: '15.41', y1: '6.51', x2: '8.59', y2: '10.49' })
-      ])
-    ]);
-    controls.appendChild(shareBtn);
-
-    leftCard.appendChild(controls);
-
-    // Ползунок громкости
-    const volumeRow = Renderer.createElement('div', {
-      className: 'player-volume-row flex items-center justify-center gap-2 mt-2',
-      style: 'width: 100%; max-width: 200px; margin: 0.5rem auto 0 auto; box-sizing: border-box;'
-    }, [
-      Renderer.createElement('span', { style: 'color: var(--text-muted); font-size: 0.9rem;' }, ['🔈']),
-      Renderer.createElement('input', {
-        type: 'range',
-        id: 'player-volume-slider',
-        min: '0',
-        max: '1',
-        step: '0.05',
-        value: audioPlayer.volume.toString(),
-        style: 'flex: 1; accent-color: var(--chord-color); cursor: pointer;'
-      }),
-      Renderer.createElement('span', { style: 'color: var(--text-muted); font-size: 0.9rem;' }, ['🔊'])
-    ]);
-    leftCard.appendChild(volumeRow);
-
-    studioLayout.appendChild(leftCard);
-
-    // ПРАВАЯ КОЛОНКА
-    const rightPanel = Renderer.createElement('div', { className: 'player-queue-panel' });
-
-    const qHeader = Renderer.createElement('div', { className: 'player-queue-header' });
-    const qTitleWrap = Renderer.createElement('div', {}, [
-      Renderer.createElement('strong', { className: 'text-main', style: 'font-size: 1.1rem;' }, ['Играет сейчас']),
-      Renderer.createElement('div', { className: 'text-sm text-muted' }, ['Треков в списке: ' + audioPlayer.playlistQueue.length])
-    ]);
-    qHeader.appendChild(qTitleWrap);
-
-    const srcWrap = Renderer.createElement('div', { className: 'player-source-selector-wrap' });
-    srcWrap.appendChild(Renderer.createElement('span', { className: 'text-sm text-muted' }, ['Источник:']));
-
-    const srcSelect = Renderer.createElement('select', {
-      className: 'input-select text-sm',
-      dataset: { action: 'change-player-source' },
-      style: 'min-height: 38px; padding: 0.3rem 0.6rem;'
-    });
-
-    const optAll = Renderer.createElement('option', { value: 'all' }, ['Все записи']);
-    if (state.playerSource === 'all') optAll.selected = true;
-    srcSelect.appendChild(optAll);
-
-    state.playlists.forEach(pl => {
-      const opt = Renderer.createElement('option', { value: pl.id }, ['Сборник: ' + pl.title]);
-      if (state.playerSource === pl.id) opt.selected = true;
-      srcSelect.appendChild(opt);
-    });
-
-    srcWrap.appendChild(srcSelect);
-    qHeader.appendChild(srcWrap);
-    rightPanel.appendChild(qHeader);
-
-    const queueList = Renderer.createElement('div', {
-      className: 'song-list',
-      style: 'max-height: 60vh; overflow-y: auto;'
-    });
-
-    if (audioPlayer.playlistQueue.length === 0) {
-      queueList.appendChild(Renderer.createElement('div', {
-        className: 'text-sm text-muted',
-        style: 'text-align: center; padding: 2rem;'
-      }, ['Очередь воспроизведения пуста']));
-    } else {
-      audioPlayer.playlistQueue.forEach((track, idx) => {
-        const isCurrent = audioPlayer.currentIndex === idx;
-        const parentS = state.songs.find(s => s.id === track.song_id);
-
-        const row = Renderer.createElement('div', {
-          className: 'queue-track-row ' + (isCurrent ? 'active' : ''),
-          dataset: { action: 'play-queue-index', queueIndex: idx }
+    // 2. ИНТЕРАКТИВНОЕ ОКНО С ПЕРЕДВИЖЕНИЕМ АККОРДОВ (TOUCH / MOUSE)
+    const editorCard = Renderer.createElement('div', { className: 'song-card', style: 'flex-direction: column; gap: 0.6rem;' });
+    const editorHeader = Renderer.createElement('div', { className: 'flex items-center justify-between flex-wrap gap-2' });
+    editorHeader.appendChild(Renderer.createElement('h3', { className: 'text-main text-sm' }, ['🎸 Интерактивное перемещение аккордов над текстом']));
+    
+    const addChordBtn = Renderer.createElement('button', {
+      className: 'btn btn-outline btn-sm',
+      style: 'font-size: 0.78rem; padding: 0.2rem 0.5rem;'
+    }, ['+ Добавить аккорд']);
+    addChordBtn.addEventListener('click', () => {
+      const chordName = prompt('Введите имя аккорда (например, Am, Dm, G7):', 'Am');
+      if (chordName && chordName.trim()) {
+        if (model.lines.length === 0) {
+          model.lines.push({ kind: 'verse', lyric: ' ', chords: [] });
+        }
+        model.lines[0].chords.push({
+          name: chordName.trim(),
+          charIndex: 0,
+          confidence: 1.0,
+          manual: true
         });
+        this.syncModelToViews();
+        this.renderSongEditorView(container);
+      }
+    });
+    editorHeader.appendChild(addChordBtn);
+    editorCard.appendChild(editorHeader);
 
-        const leftBox = Renderer.createElement('div', { className: 'queue-track-left' });
-        leftBox.appendChild(Renderer.createElement('span', { className: 'queue-track-index' }, [
-          isCurrent && state.isPlaying ? '▶' : (idx + 1) + '.'
-        ]));
+    editorCard.appendChild(Renderer.createElement('div', { className: 'text-xs text-muted' }, [
+      'Двигайте плашки аккордов пальцем на тачскрине телефона для точной магнитной привязки к слогам. Нажмите на плашку, чтобы изменить имя аккорда, или на «×», чтобы удалить.'
+    ]));
 
-        const titlesBox = Renderer.createElement('div', { className: 'queue-track-titles' });
-        // В queue-track-titles оставить только название песни по ID
-        const songNameOnly = parentS ? parentS.title : (track.label || track.filename);
-        titlesBox.appendChild(Renderer.createElement('div', { className: 'queue-title', style: 'font-weight: 600;' }, [
-          songNameOnly
-        ]));
-        leftBox.appendChild(titlesBox);
-        row.appendChild(leftBox);
+    // Lines container
+    const linesContainer = Renderer.createElement('div', {
+      id: 'interactive-touch-lines',
+      style: 'display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.25rem;'
+    });
 
-        const normType = Renderer.normalizeAudioType(track.type);
-        const rightBox = Renderer.createElement('div', { className: 'flex items-center gap-2' });
-        rightBox.appendChild(Renderer.createElement('span', {
-          className: Renderer.getTypeBadgeClass(normType),
-          style: 'padding: 2px 7px; border-radius: 4px; font-weight: 700; font-size: 0.75rem; text-transform: uppercase;'
-        }, [
-          normType
-        ]));
-        row.appendChild(rightBox);
+    model.lines.forEach((line, lineIdx) => {
+      if (line.kind === 'section-header' || line.kind === 'chorus-header' || (line.lyric && line.lyric.startsWith('['))) {
+        const secHdr = Renderer.createElement('div', {
+          style: 'font-weight: 700; font-size: 0.8rem; color: var(--chord-color); margin-top: 0.35rem;'
+        }, [line.lyric]);
+        linesContainer.appendChild(secHdr);
+        return;
+      }
 
-        queueList.appendChild(row);
+      if (!line.lyric && (!line.chords || line.chords.length === 0)) {
+        linesContainer.appendChild(Renderer.createElement('div', { style: 'height: 0.5rem;' }));
+        return;
+      }
+
+      const lineBlock = Renderer.createElement('div', { className: 'editor-line-block' });
+      const trackDiv = Renderer.createElement('div', { className: 'editor-line-track', dataset: { lineIndex: String(lineIdx) } });
+      const textRow = Renderer.createElement('div', { className: 'editor-text-row' });
+
+      const lyricChars = (line.lyric || ' ').split('');
+      lyricChars.forEach((ch, cIdx) => {
+        const cell = Renderer.createElement('span', { className: 'char-cell', dataset: { charIndex: String(cIdx) } }, [ch]);
+        textRow.appendChild(cell);
+      });
+      trackDiv.appendChild(textRow);
+
+      // Render draggable chord chips
+      if (line.chords && line.chords.length > 0) {
+        line.chords.forEach((chord, cIdx) => {
+          const chip = Renderer.createElement('div', {
+            className: 'chord-chip',
+            dataset: { lineIndex: String(lineIdx), chordIndex: String(cIdx) }
+          });
+
+          const chipName = Renderer.createElement('span', { style: 'cursor: pointer;' }, [chord.name || 'Am']);
+          chipName.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const edited = prompt('Изменить аккорд:', chord.name);
+            if (edited && edited.trim()) {
+              chord.name = edited.trim();
+              this.syncModelToViews();
+              this.renderSongEditorView(container);
+            }
+          });
+          chip.appendChild(chipName);
+
+          const chipDel = Renderer.createElement('span', { className: 'btn-chip-del', title: 'Удалить аккорд' }, ['×']);
+          chipDel.addEventListener('click', (e) => {
+            e.stopPropagation();
+            line.chords.splice(cIdx, 1);
+            this.syncModelToViews();
+            this.renderSongEditorView(container);
+          });
+          chip.appendChild(chipDel);
+
+          // Touch and Mouse Dragging
+          this.setupMobileChordDrag(chip, chord, line, trackDiv, textRow);
+
+          trackDiv.appendChild(chip);
+        });
+      }
+
+      lineBlock.appendChild(trackDiv);
+      linesContainer.appendChild(lineBlock);
+    });
+
+    editorCard.appendChild(linesContainer);
+    wrap.appendChild(editorCard);
+
+    // Position chord chips initially
+    requestAnimationFrame(() => this.positionMobileChordChips());
+
+    // 3. ОКНО ФОРМАТА OPENSONG (С ДВУСТОРОННЕЙ СИНХРОНИЗАЦИЕЙ)
+    const openSongCard = Renderer.createElement('div', { className: 'song-card', style: 'flex-direction: column; gap: 0.5rem;' });
+    openSongCard.appendChild(Renderer.createElement('h3', { className: 'text-main text-sm' }, ['📄 Формат OpenSong']));
+    openSongCard.appendChild(Renderer.createElement('div', { className: 'text-xs text-muted' }, [
+      'Канонический формат со строками аккордов (точка «.») и текстом (пробел « »). Изменения синхронизируются в реальном времени.'
+    ]));
+
+    const openSongTextarea = Renderer.createElement('textarea', {
+      id: 'editor-opensong-lyrics',
+      className: 'input-textarea',
+      style: 'font-family: monospace; font-size: 0.85rem; line-height: 1.45; white-space: pre; min-height: 150px;',
+      rows: 8
+    }, [this.serializeModelToOpenSongLyrics(model)]);
+
+    openSongTextarea.addEventListener('input', (e) => {
+      this.parseOpenSongLyricsIntoModel(e.target.value, model);
+      requestAnimationFrame(() => this.positionMobileChordChips());
+    });
+    openSongCard.appendChild(openSongTextarea);
+    wrap.appendChild(openSongCard);
+
+    // 4. РЕДАКТИРОВАНИЕ ВСЕХ СВОЙСТВ ТАБЛИЦЫ SONGS.CSV ДЛЯ ЭТОЙ ПЕСНИ
+    const propsCard = Renderer.createElement('div', { className: 'song-card', style: 'flex-direction: column; gap: 0.75rem;' });
+    propsCard.appendChild(Renderer.createElement('h3', { className: 'text-main text-sm' }, ['⚙️ Свойства песни в таблице songs.csv']));
+
+    const propGrid = Renderer.createElement('div', { className: 'mobile-prop-grid' });
+
+    // ID, title, author, key, capo, tempo, time_signature, presentation, theme, alttheme, user1, user2, user3
+    const fieldsConfig = [
+      { id: 'edit-prop-id', label: 'ID песни', key: 'id', val: curSong.id },
+      { id: 'edit-prop-number', label: 'Номер (number)', key: 'number', val: curSong.number || curSong.id },
+      { id: 'edit-prop-title', label: 'Название (title)', key: 'title', val: curSong.title || '' },
+      { id: 'edit-prop-author', label: 'Автор (author)', key: 'author', val: curSong.author || 'Огненный ветер' },
+      { id: 'edit-prop-key', label: 'Тональность (key)', key: 'key', val: curSong.key || '' },
+      { id: 'edit-prop-capo', label: 'Каподастр (capo)', key: 'capo', val: curSong.capo || '' },
+      { id: 'edit-prop-tempo', label: 'Темп BPM (tempo)', key: 'tempo', val: curSong.tempo || '' },
+      { id: 'edit-prop-time_signature', label: 'Размер (time_signature)', key: 'time_signature', val: curSong.time_signature || '4/4' },
+      { id: 'edit-prop-presentation', label: 'Порядок <presentation>', key: 'presentation', val: curSong.presentation || '' },
+      { id: 'edit-prop-theme', label: 'Тема / Сборник (theme)', key: 'theme', val: curSong.theme || '' },
+      { id: 'edit-prop-alttheme', label: 'Теги песни (alttheme)', key: 'alttheme', val: curSong.alttheme || '' },
+      { id: 'edit-prop-user1', label: 'Метка 1 (user1)', key: 'user1', val: curSong.user1 || '' },
+      { id: 'edit-prop-user2', label: 'Метка 2 (user2)', key: 'user2', val: curSong.user2 || '' },
+      { id: 'edit-prop-user3', label: 'Метка 3 (user3)', key: 'user3', val: curSong.user3 || '' }
+    ];
+
+    fieldsConfig.forEach(f => {
+      const box = Renderer.createElement('div', { style: 'display: flex; flex-direction: column; gap: 0.2rem;' });
+      box.appendChild(Renderer.createElement('label', { style: 'font-size: 0.72rem; color: var(--text-muted); font-weight: 600;' }, [f.label]));
+      const input = Renderer.createElement('input', {
+        type: 'text',
+        id: f.id,
+        className: 'input-text',
+        value: f.val,
+        style: 'font-size: 0.82rem; padding: 0.35rem 0.5rem;'
+      });
+      box.appendChild(input);
+      propGrid.appendChild(box);
+    });
+    propsCard.appendChild(propGrid);
+    wrap.appendChild(propsCard);
+
+    // 5. КНОПКА ВНЕСЕНИЯ ИЗМЕНЕНИЙ В ЛОКАЛЬНУЮ SONGS.CSV
+    const actionsCard = Renderer.createElement('div', { className: 'song-card', style: 'flex-direction: column; gap: 0.75rem; align-items: stretch;' });
+    
+    const saveLocalBtn = Renderer.createElement('button', {
+      className: 'btn btn-primary',
+      style: 'padding: 0.75rem 1rem; font-size: 0.95rem; font-weight: 700;'
+    }, ['💾 1. Внести изменения в локальную songs.csv']);
+
+    saveLocalBtn.addEventListener('click', async () => {
+      // Gather fields
+      fieldsConfig.forEach(f => {
+        const inp = document.getElementById(f.id);
+        if (inp) curSong[f.key] = inp.value.trim();
+      });
+
+      // Update ChordPro and Lyrics
+      curSong.chordpro = this.serializeModelToChordPro(model);
+      curSong.lyrics = this.serializeModelToLyrics(model);
+
+      undoManager.pushState('Редактирование песни #' + curSong.id, { songs: state.songs });
+
+      // Save to IndexedDB
+      await storage.putOne('songs', curSong);
+
+      // Save to localStorage
+      try {
+        const localOverrides = JSON.parse(localStorage.getItem('ov_edited_songs') || '{}');
+        localOverrides[curSong.id] = curSong;
+        localStorage.setItem('ov_edited_songs', JSON.stringify(localOverrides));
+      } catch(e) {}
+
+      this.searchEngine.updateIndex(state.songs);
+      store.setState({ songs: [...state.songs] });
+
+      AppController.showToast('✓ Изменения успешно сохранены в локальную базу!');
+    });
+    actionsCard.appendChild(saveLocalBtn);
+
+    // 6. ЕЩЁ НИЖЕ: КНОПКА ВЫГРУЗКИ JSON ДЛЯ АДМИНИСТРАТОРА
+    const exportAdminJsonBtn = Renderer.createElement('button', {
+      className: 'btn btn-outline',
+      style: 'padding: 0.75rem 1rem; font-size: 0.92rem; font-weight: 700; border-color: var(--chord-color); color: var(--chord-color);'
+    }, ['📤 2. Выгрузить JSON для администратора']);
+
+    exportAdminJsonBtn.addEventListener('click', () => {
+      // Build admin payload for this single edited song
+      fieldsConfig.forEach(f => {
+        const inp = document.getElementById(f.id);
+        if (inp) curSong[f.key] = inp.value.trim();
+      });
+
+      curSong.chordpro = this.serializeModelToChordPro(model);
+      curSong.lyrics = this.serializeModelToLyrics(model);
+
+      const exportPayload = {
+        type: 'fwapp_song_admin_submission',
+        version: '4.0.0',
+        exportedAt: new Date().toISOString(),
+        song: curSong,
+        openSongLyrics: this.serializeModelToOpenSongLyrics(model)
+      };
+
+      const jsonStr = JSON.stringify(exportPayload, null, 2);
+      const blob = new Blob([jsonStr], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'song_' + curSong.id + '_' + (curSong.title || 'song').replace(/[^a-zA-Z0-9а-яА-ЯёЁ]/g, '_') + '.json';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      AppController.showToast('✓ Файл JSON для администратора успешно сформирован!');
+    });
+    actionsCard.appendChild(exportAdminJsonBtn);
+
+    wrap.appendChild(actionsCard);
+    container.appendChild(wrap);
+  }
+
+  // Model builder from song
+  buildSongEditorModel(song) {
+    const model = {
+      id: song.id,
+      title: song.title || '',
+      key: song.key || '',
+      lines: []
+    };
+
+    const cp = song.chordpro || '';
+    if (cp && cp.includes('[')) {
+      const lines = cp.split(/\r?\n/);
+      lines.forEach(rawLine => {
+        const trimmed = rawLine.trim();
+        if (!trimmed) {
+          model.lines.push({ kind: 'blank', lyric: '', chords: [] });
+          return;
+        }
+        if (/^\{[a-zA-Z0-9_\-]+(?::.*)?\}$/.test(trimmed)) return;
+        if (/^\[?(V\d+|C\d*|B\d*|Intro|Outro|ПРИПЕВ|КУПЛЕТ|БРИДЖ|ПР\.|БР\.)\]?$/i.test(trimmed)) {
+          model.lines.push({ kind: 'section-header', lyric: trimmed, chords: [] });
+          return;
+        }
+
+        const chords = [];
+        let cleanLyric = '';
+        const regex = /\[([^\]]+)\]|([^\[]+)/g;
+        let match;
+        while ((match = regex.exec(rawLine)) !== null) {
+          if (match[1]) {
+            chords.push({
+              name: match[1],
+              charIndex: cleanLyric.length,
+              confidence: 1.0,
+              manual: true
+            });
+          } else if (match[2]) {
+            cleanLyric += match[2];
+          }
+        }
+        model.lines.push({ kind: 'verse', lyric: cleanLyric, chords });
+      });
+    } else {
+      const lines = (song.lyrics || '').split(/\r?\n/);
+      lines.forEach(rawLine => {
+        const trimmed = rawLine.trim();
+        if (!trimmed) {
+          model.lines.push({ kind: 'blank', lyric: '', chords: [] });
+        } else if (/^\[?(V\d+|C\d*|B\d*|Intro|Outro|ПРИПЕВ|КУПЛЕТ|БРИДЖ|ПР\.|БР\.)\]?$/i.test(trimmed)) {
+          model.lines.push({ kind: 'section-header', lyric: trimmed, chords: [] });
+        } else {
+          model.lines.push({ kind: 'verse', lyric: rawLine, chords: [] });
+        }
       });
     }
 
-    rightPanel.appendChild(queueList);
-    studioLayout.appendChild(rightPanel);
-
-    container.appendChild(studioLayout);
+    return model;
   }
 
-  // ============================================================
-  // НАСТРОЙКИ: ВЫПАДАЮЩИЙ СПИСОК РОЛЕЙ (РЕШАЕТ ПРОБЛЕМУ 3 СКРИНА)
-  // ============================================================
+  // Position chord chips over character cells
+  positionMobileChordChips() {
+    const tracks = document.querySelectorAll('#interactive-touch-lines .editor-line-track');
+    const model = window._activeEditModel;
+    if (!model) return;
+
+    tracks.forEach(track => {
+      const lineIdx = parseInt(track.dataset.lineIndex, 10);
+      const textRow = track.querySelector('.editor-text-row');
+      if (!textRow) return;
+
+      const charCells = textRow.querySelectorAll('.char-cell');
+      const chips = track.querySelectorAll('.chord-chip');
+
+      chips.forEach(chip => {
+        const chordIdx = parseInt(chip.dataset.chordIndex, 10);
+        const line = model.lines[lineIdx];
+        if (!line || !line.chords || !line.chords[chordIdx]) return;
+        const chord = line.chords[chordIdx];
+
+        const targetChar = charCells[chord.charIndex];
+        if (targetChar) {
+          const charRect = targetChar.getBoundingClientRect();
+          const trackRect = track.getBoundingClientRect();
+          const targetX = (charRect.left - trackRect.left) + (charRect.width / 2);
+          chip.style.left = Math.max(14, targetX) + 'px';
+        } else {
+          chip.style.left = '20px';
+        }
+      });
+    });
+  }
+
+  // Setup mobile touch drag for chord chip
+  setupMobileChordDrag(chip, chord, line, trackDiv, textRow) {
+    let isDragging = false;
+    let startX = 0;
+    let initialLeft = 0;
+
+    const onStart = (clientX) => {
+      isDragging = true;
+      startX = clientX;
+      initialLeft = parseFloat(chip.style.left) || 20;
+      chip.classList.add('selected');
+    };
+
+    const onMove = (clientX) => {
+      if (!isDragging) return;
+      const dx = clientX - startX;
+      const newLeft = Math.max(10, initialLeft + dx);
+      chip.style.left = newLeft + 'px';
+
+      const charCells = Array.from(textRow.querySelectorAll('.char-cell'));
+      const trackRect = trackDiv.getBoundingClientRect();
+      let closestChar = null;
+      let minDistance = Infinity;
+
+      charCells.forEach(cell => {
+        const cellRect = cell.getBoundingClientRect();
+        const cellCenter = (cellRect.left - trackRect.left) + (cellRect.width / 2);
+        const dist = Math.abs(cellCenter - newLeft);
+        if (dist < minDistance) {
+          minDistance = dist;
+          closestChar = cell;
+        }
+      });
+
+      charCells.forEach(c => c.classList.remove('snap-target'));
+      if (closestChar && minDistance < 40) {
+        closestChar.classList.add('snap-target');
+      }
+    };
+
+    const onEnd = () => {
+      if (!isDragging) return;
+      isDragging = false;
+      chip.classList.remove('selected');
+
+      const activeSnap = textRow.querySelector('.char-cell.snap-target');
+      if (activeSnap) {
+        chord.charIndex = parseInt(activeSnap.dataset.charIndex, 10);
+        chord.confidence = 1.0;
+        chord.manual = true;
+        activeSnap.classList.remove('snap-target');
+      }
+
+      this.syncModelToViews();
+      this.positionMobileChordChips();
+    };
+
+    // Touch events for mobile
+    chip.addEventListener('touchstart', (e) => {
+      if (e.target.classList.contains('btn-chip-del')) return;
+      e.preventDefault();
+      onStart(e.touches[0].clientX);
+    }, { passive: false });
+
+    window.addEventListener('touchmove', (e) => {
+      if (isDragging && e.touches && e.touches[0]) {
+        onMove(e.touches[0].clientX);
+      }
+    }, { passive: true });
+
+    window.addEventListener('touchend', () => onEnd());
+    window.addEventListener('touchcancel', () => onEnd());
+
+    // Mouse events for desktop testing
+    chip.addEventListener('mousedown', (e) => {
+      if (e.target.classList.contains('btn-chip-del')) return;
+      e.preventDefault();
+      onStart(e.clientX);
+
+      const moveHandler = (ev) => onMove(ev.clientX);
+      const upHandler = () => {
+        onEnd();
+        window.removeEventListener('mousemove', moveHandler);
+        window.removeEventListener('mouseup', upHandler);
+      };
+      window.addEventListener('mousemove', moveHandler);
+      window.addEventListener('mouseup', upHandler);
+    });
+  }
+
+  syncModelToViews() {
+    const model = window._activeEditModel;
+    if (!model) return;
+    const osView = document.getElementById('editor-opensong-lyrics');
+    if (osView) {
+      osView.value = this.serializeModelToOpenSongLyrics(model);
+    }
+  }
+
+  serializeModelToOpenSongLyrics(model) {
+    const out = [];
+    model.lines.forEach(line => {
+      if (line.kind === 'section-header' || line.kind === 'chorus-header' || (line.lyric && line.lyric.startsWith('['))) {
+        out.push(line.lyric);
+        return;
+      }
+      if (!line.lyric && (!line.chords || line.chords.length === 0)) {
+        out.push('');
+        return;
+      }
+
+      const chords = line.chords ? [...line.chords].sort((a, b) => a.charIndex - b.charIndex) : [];
+      let lyricStr = line.lyric || '';
+
+      if (chords.length > 0) {
+        let chordLine = '.';
+        for (const c of chords) {
+          const targetCol = Math.max(c.charIndex + 1, chordLine.length + (chordLine.length > 1 ? 1 : 0));
+          while (chordLine.length < targetCol) chordLine += ' ';
+          chordLine += (c.name || '').trim();
+        }
+        out.push(chordLine);
+      }
+      out.push(' ' + lyricStr);
+    });
+    return out.join('\n');
+  }
+
+  parseOpenSongLyricsIntoModel(lyricsText, model) {
+    const lines = lyricsText.split(/\r?\n/);
+    const newLines = [];
+    let i = 0;
+
+    while (i < lines.length) {
+      const line = lines[i];
+      if (line.startsWith('.')) {
+        const chordLine = line.substring(1);
+        const nextLine = lines[i + 1];
+        let lyricStr = '';
+        if (nextLine !== undefined && !nextLine.startsWith('.') && !nextLine.startsWith('[')) {
+          lyricStr = nextLine.startsWith(' ') ? nextLine.substring(1) : nextLine;
+          i += 2;
+        } else {
+          i += 1;
+        }
+
+        const chords = [];
+        const regex = /\S+/g;
+        let m;
+        while ((m = regex.exec(chordLine)) !== null) {
+          chords.push({
+            name: m[0],
+            charIndex: Math.max(0, m.index),
+            confidence: 1.0,
+            manual: true
+          });
+        }
+        newLines.push({ kind: 'verse', lyric: lyricStr, chords });
+      } else if (line.startsWith('[')) {
+        newLines.push({ kind: 'section-header', lyric: line, chords: [] });
+        i++;
+      } else if (!line.trim()) {
+        newLines.push({ kind: 'blank', lyric: '', chords: [] });
+        i++;
+      } else {
+        const lyricStr = line.startsWith(' ') ? line.substring(1) : line;
+        newLines.push({ kind: 'verse', lyric: lyricStr, chords: [] });
+        i++;
+      }
+    }
+    model.lines = newLines;
+  }
+
+  serializeModelToChordPro(model) {
+    const out = [];
+    model.lines.forEach(line => {
+      if (!line.lyric && (!line.chords || line.chords.length === 0)) {
+        out.push('');
+        return;
+      }
+      if (line.kind === 'section-header' || line.kind === 'chorus-header' || (line.lyric && line.lyric.startsWith('['))) {
+        out.push(line.lyric);
+        return;
+      }
+      if (!line.chords || line.chords.length === 0) {
+        out.push(line.lyric);
+        return;
+      }
+
+      const sorted = [...line.chords].sort((a, b) => b.charIndex - a.charIndex);
+      let res = line.lyric;
+      for (const c of sorted) {
+        const cText = c.name ? '[' + c.name + ']' : '';
+        const idx = Math.min(res.length, Math.max(0, c.charIndex));
+        res = res.slice(0, idx) + cText + res.slice(idx);
+      }
+      out.push(res);
+    });
+    return out.join('\n');
+  }
+
+  serializeModelToLyrics(model) {
+    return model.lines.map(l => l.lyric || '').join('\n');
+  }
+
+
   renderSettingsView(container) {
     container.innerHTML = '';
     const state = store.getState();
