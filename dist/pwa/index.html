@@ -6880,6 +6880,223 @@ class UpdateEngine {
   }
 }
 
+
+function normalizeSearchText(str) {
+  if (!str) return '';
+  return str.normalize('NFKC').toLowerCase()
+    .replace(/ё/g, 'е')
+    .replace(/[\u2010-\u2015\u2212\-_.,/#!$%^&*;:{}=~\`()?"«»—\[\]]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function cleanFilenameToTitleVariants(filename) {
+  let name = filename.replace(/\.(mp3|wav|m4a|ogg|flac)$/i, '').trim();
+
+  let trackType = 'альбом';
+  if (/\b(?:БС|ПБС)[\s\-_0-9]*/i.test(name) || /БС[\-_]/i.test(name)) trackType = 'запись';
+  else if (/\b(?:Р|РЕП)[\s\-_0-9]*/i.test(name) || /Р[\-_]/i.test(name)) trackType = 'запись';
+  else if (/\b(?:К|КВ|концерт|live)[\s\-_0-9]*/i.test(name) || /К[\-_]/i.test(name)) trackType = 'импро';
+  else if (/минус|minus|instrumental/i.test(name)) trackType = 'минус';
+
+  let clean = name
+    .replace(/^[\d]{1,4}[-_\.][\d]{1,4}[-_\.\s]*/, '')
+    .replace(/^[\d]{1,4}[-_\.\s]+/, '')
+    .trim();
+
+  clean = clean
+    .replace(/\b(?:БС|ПБС|К|КВ|Р)[\s\-_0-9]+/gi, ' ')
+    .replace(/БС[-_\s]+[\d\-_]+/gi, ' ')
+    .replace(/К[-_\s]+[\d\-_]+/gi, ' ')
+    .replace(/\b\d{4}[-_]\d{2}[-_]\d{2}\b/g, ' ')
+    .replace(/\b\d{2}\.\d{2}\.\d{4}\b/g, ' ')
+    .replace(/\b\d{4}\s+\d{2}\s+\d{2}\b/g, ' ')
+    .replace(/[\(!%+\?]+\s*[\)!%+\?]*/g, ' ')
+    .replace(/\([^)]*(?:концерт|live|фабрика хвалы|блюз|молитва|мигуны|аккордеон|Артем|СН|СВ|РОЦК|элгитара|драйва|стиха|баяна|медленно|чуть|благодатная)[^)]*\)/gi, ' ')
+    .replace(/-026\s+почти\s+ровно\s+\d+\s+всегда/gi, ' ')
+    .replace(/_/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  const variants = [clean];
+  const parenMatch = clean.match(/^([^(]+)\s*\(([^)]+)\)/);
+  if (parenMatch) {
+    variants.push(parenMatch[1].trim());
+    variants.push(parenMatch[2].trim());
+  }
+  const plusMatch = clean.match(/^([^+]+)\s*\+\s*(.+)$/);
+  if (plusMatch) {
+    variants.push(plusMatch[1].trim());
+    variants.push(plusMatch[2].trim());
+  }
+
+  return { variants, trackType };
+}
+
+function matchTrackToSong(filename, songs) {
+  if (!filename || !songs || !songs.length) return null;
+  const legacyMatch = filename.match(/^0*([0-9]{1,4})[_-]([a-zA-Z0-9а-яА-ЯёЁ]+)[_-](.*)$/i);
+  if (legacyMatch) {
+    const rawNum = parseInt(legacyMatch[1], 10);
+    const sId = rawNum.toString().padStart(4, '0');
+    const rawNumStr = String(rawNum);
+    const found = songs.find(s => s.id === sId || s.id === rawNumStr || String(s.number) === rawNumStr);
+    if (found) {
+      let rType = legacyMatch[2].toLowerCase();
+      let effType = 'альбом';
+      if (rType.startsWith('альбом') || rType === 'studio') effType = 'альбом';
+      else if (rType.startsWith('запись') || rType === 'rehearsal' || rType.startsWith('rep')) effType = 'запись';
+      else if (rType.startsWith('минус') || rType === 'chords' || rType === 'minus') effType = 'минус';
+      else if (rType.startsWith('импро') || rType === 'live') effType = 'импро';
+      else effType = rType;
+      return { song: found, type: effType, matchMode: 'id' };
+    }
+  }
+
+  const { variants, trackType } = cleanFilenameToTitleVariants(filename);
+  let bestSong = null;
+  let bestScore = -1;
+
+  for (const v of variants) {
+    const normV = normalizeSearchText(v);
+    if (!normV || normV.length < 2) continue;
+    const vWords = normV.split(' ').filter(w => w.length > 2);
+
+    for (const s of songs) {
+      const sNorm = normalizeSearchText(s.title);
+      const sAlt = normalizeSearchText(s.theme || s.alttheme || '');
+      const sLyr = normalizeSearchText(s.lyrics || '');
+      if (!sNorm) continue;
+
+      let score = 0;
+      if (normV === sNorm || normV === sAlt) {
+        score = 1000;
+      } else if (normV.startsWith(sNorm) || sNorm.startsWith(normV)) {
+        score = 800;
+      } else if (sNorm.includes(normV) || normV.includes(sNorm)) {
+        score = 650;
+      } else {
+        const sWords = sNorm.split(' ').filter(w => w.length > 2);
+        let common = 0;
+        for (const w of vWords) {
+          if (sWords.includes(w)) common++;
+        }
+        if (common >= 2 && (common === vWords.length || common >= sWords.length * 0.5)) {
+          score = 500 + common * 40;
+        } else if (common === 1 && vWords.length === 1 && sWords.length === 1) {
+          score = 450;
+        } else if (vWords.length >= 2) {
+          if (sLyr.includes(normV)) {
+            score = 480;
+          } else {
+            let lyrMatches = 0;
+            for (const w of vWords) {
+              if (sLyr.includes(w)) lyrMatches++;
+            }
+            if (lyrMatches >= 2 && lyrMatches === vWords.length) {
+              score = 450;
+            } else if (lyrMatches >= 2 && lyrMatches >= vWords.length * 0.6) {
+              score = 400 + lyrMatches * 30;
+            }
+          }
+        } else if (vWords.length === 1 && vWords[0].length >= 4) {
+          if (sWords.some(sw => sw.startsWith(vWords[0]) || vWords[0].startsWith(sw))) {
+            score = 380;
+          }
+        }
+      }
+
+      if (normV.length >= 5 && sNorm.length >= 5) {
+        const subV = normV.slice(0, 7);
+        const subS = sNorm.slice(0, 7);
+        if (subV === subS && score < 600) {
+          score = Math.max(score, 600);
+        }
+      }
+
+      if (score > bestScore) {
+        bestScore = score;
+        bestSong = s;
+      }
+    }
+  }
+
+  if (bestScore >= 350 && bestSong) {
+    return { song: bestSong, type: trackType, matchMode: 'fuzzy', score: bestScore };
+  }
+  return null;
+}
+
+window.matchAudioTrackToSong = matchTrackToSong;
+window.cleanFilenameToTitleVariants = cleanFilenameToTitleVariants;
+
+function openSheetPreviewModal(sheet) {
+  const existing = document.getElementById('sheet-preview-modal-overlay');
+  if (existing) existing.remove();
+
+  const overlay = document.createElement('div');
+  overlay.id = 'sheet-preview-modal-overlay';
+  overlay.className = 'modal-overlay';
+  overlay.style.zIndex = '9999';
+
+  const modal = document.createElement('div');
+  modal.className = 'modal-content';
+  modal.style.maxWidth = '92vw';
+  modal.style.width = '800px';
+  modal.style.maxHeight = '90vh';
+  modal.style.display = 'flex';
+  modal.style.flexDirection = 'column';
+  modal.style.padding = '1rem';
+  modal.style.background = 'var(--bg-main)';
+  modal.style.borderRadius = '12px';
+  modal.style.boxShadow = '0 10px 30px rgba(0,0,0,0.5)';
+
+  const header = document.createElement('div');
+  header.className = 'flex items-center justify-between mb-2';
+  header.innerHTML = '<strong style="font-size: 1rem; color: var(--text-main); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">🎼 ' + (sheet.name || 'Ноты') + '</strong>';
+
+  const closeBtn = document.createElement('button');
+  closeBtn.className = 'btn btn-outline btn-sm';
+  closeBtn.textContent = '✕ Закрыть';
+  closeBtn.onclick = () => overlay.remove();
+  header.appendChild(closeBtn);
+  modal.appendChild(header);
+
+  const bodyWrap = document.createElement('div');
+  bodyWrap.style.flex = '1';
+  bodyWrap.style.minHeight = '300px';
+  bodyWrap.style.overflow = 'auto';
+  bodyWrap.style.display = 'flex';
+  bodyWrap.style.alignItems = 'center';
+  bodyWrap.style.justifyContent = 'center';
+  bodyWrap.style.background = '#1e293b';
+  bodyWrap.style.borderRadius = '8px';
+
+  if (sheet.type === 'pdf') {
+    const embed = document.createElement('iframe');
+    embed.src = sheet.dataUrl;
+    embed.style.width = '100%';
+    embed.style.height = '70vh';
+    embed.style.border = 'none';
+    bodyWrap.appendChild(embed);
+  } else {
+    const img = document.createElement('img');
+    img.src = sheet.dataUrl;
+    img.style.maxWidth = '100%';
+    img.style.maxHeight = '70vh';
+    img.style.objectFit = 'contain';
+    bodyWrap.appendChild(img);
+  }
+  modal.appendChild(bodyWrap);
+
+  overlay.onclick = (e) => {
+    if (e.target === overlay) overlay.remove();
+  };
+  overlay.appendChild(modal);
+  document.body.appendChild(overlay);
+}
+window.openSheetPreviewModal = openSheetPreviewModal;
+
 class AppController {
   constructor() {
     this.searchEngine = null;
@@ -8627,7 +8844,6 @@ case 'clear-search': {
         const noteText = document.getElementById('input-profile-note')?.value || '';
         const u1 = document.getElementById('input-song-user1')?.value || '';
         const u2 = document.getElementById('input-song-user2')?.value || '';
-        const u3 = document.getElementById('input-song-user3')?.value || '';
 
         const song = state.songs.find(s => s.id === songId);
         if (!song) return;
@@ -8639,7 +8855,6 @@ case 'clear-search': {
         song.notes = updatedRawNotes;
         song.user1 = u1.trim();
         song.user2 = u2.trim();
-        song.user3 = u3.trim();
 
         // Сохраняем в постоянную базу песен
         await storage.putOne('songs', song);
@@ -8649,7 +8864,7 @@ case 'clear-search': {
           const notesKey = 'song_notes_' + songId + '_' + effectiveProfile;
           localStorage.setItem(notesKey, noteText);
           const allUserNotes = JSON.parse(localStorage.getItem('ov_all_user_notes') || '{}');
-          allUserNotes[songId] = { notes: song.notes, user1: song.user1, user2: song.user2, user3: song.user3 };
+          allUserNotes[songId] = { notes: song.notes, user1: song.user1, user2: song.user2, user3: song.user3 || '' };
           localStorage.setItem('ov_all_user_notes', JSON.stringify(allUserNotes));
         } catch(e) {}
 
@@ -8660,6 +8875,38 @@ case 'clear-search': {
         this.searchEngine.updateIndex(updatedSongs);
         store.setState({ songs: updatedSongs });
         AppController.showToast('✓ Заметка сохранена для роли [' + (MUSICIAN_PROFILES.find(p => p.id === effectiveProfile)?.label || effectiveProfile) + ']!');
+        break;
+      }
+
+      case 'trigger-upload-sheet-file': {
+        const sheetInput = document.getElementById('input-upload-song-sheet');
+        if (sheetInput) sheetInput.click();
+        break;
+      }
+
+      case 'preview-sheet-item': {
+        const sheetIdx = parseInt(el.dataset.sheetIndex, 10);
+        const songId = state.currentSongId;
+        const songSheets = JSON.parse(localStorage.getItem('ov_song_sheets_' + songId) || '[]');
+        if (songSheets[sheetIdx] && window.openSheetPreviewModal) {
+          window.openSheetPreviewModal(songSheets[sheetIdx]);
+        }
+        break;
+      }
+
+      case 'delete-sheet-item': {
+        const sheetIdx = parseInt(el.dataset.sheetIndex, 10);
+        const songId = state.currentSongId;
+        const songSheets = JSON.parse(localStorage.getItem('ov_song_sheets_' + songId) || '[]');
+        if (songSheets[sheetIdx]) {
+          if (confirm('Удалить файл нот "' + songSheets[sheetIdx].name + '"?')) {
+            songSheets.splice(sheetIdx, 1);
+            localStorage.setItem('ov_song_sheets_' + songId, JSON.stringify(songSheets));
+            AppController.showToast('Файл нот удален');
+            const song = state.songs.find(s => s.id === songId);
+            if (song) this.renderSongDetailsView(document.getElementById('song-detail-container'), song);
+          }
+        }
         break;
       }
 
@@ -9591,43 +9838,27 @@ async handleBatchAudioUpload(files) {
       const file = files[i];
       const fname = file.name;
 
-      const match = fname.match(/^0*([0-9]{1,4})[_-]([a-zA-Z0-9а-яА-ЯёЁ]+)[_-](.*)$/i);
-      if (!match) {
-        AppLogger.warn('AUDIO_SCAN', 'Файл не подошел под маску ID_TYPE_TITLE: ' + fname);
+      // Распознавание трека через гибридный матчер (Legacy ID_type_title + Fuzzy Catalog Matcher)
+      const matchResult = window.matchAudioTrackToSong ? window.matchAudioTrackToSong(fname, state.songs) : null;
+      if (!matchResult || !matchResult.song) {
+        AppLogger.warn('AUDIO_SCAN', 'Файл не удалось сопоставить с каталогом: ' + fname);
         continue;
       }
 
-      const rawNum = parseInt(match[1], 10);
-      const songId = rawNum.toString().padStart(4, '0');
-      let rawType = match[2].toLowerCase();
-
-      // Нормализация к единым русским типам: альбом, запись, минус, импро
-      let baseType = 'альбом';
-      if (rawType.startsWith('альбом') || rawType === 'studio') baseType = 'альбом';
-      else if (rawType.startsWith('запись') || rawType === 'rehearsal' || rawType.startsWith('rep')) baseType = 'запись';
-      else if (rawType.startsWith('минус') || rawType === 'chords' || rawType === 'minus') baseType = 'минус';
-      else if (rawType.startsWith('импро') || rawType === 'live') baseType = 'импро';
-      else baseType = rawType;
-
-      // Если тип уже имел цифру (например запись2), сохраняем её
-      let effectiveType = rawType;
-      if (!/d+$/.test(rawType)) {
-        effectiveType = baseType;
-      }
-
-      const song = state.songs.find(s => s.id === songId);
-      if (!song) continue;
+      const song = matchResult.song;
+      const songId = String(song.id).padStart(4, '0');
+      const effectiveType = matchResult.type || 'альбом';
 
       const fileUrl = URL.createObjectURL(file);
       const audioId = 'aud-' + songId + '-' + effectiveType + '-' + i;
       const typeLabels = {
-        'альбом': 'Студийная оригинальная запись',
-        'запись': 'Репетиционная дорожка / демка',
+        'альбом': 'Студийная оригинальная запись (альбом)',
+        'запись': 'Репетиционная дорожка / богослужение',
         'минус': 'Инструментал (минус без слов)',
         'импро': 'Концертная импровизация (live)'
       };
 
-            let trackCoverUrl = '';
+      let trackCoverUrl = '';
       try {
         trackCoverUrl = await Id3ArtworkHelper.extractCoverFromBlob(file);
         if (trackCoverUrl) {
@@ -9638,19 +9869,19 @@ async handleBatchAudioUpload(files) {
       const newTrack = {
         id: audioId,
         song_id: songId,
-        label: song.title || typeLabels[baseType] || effectiveType,
+        label: song.title || typeLabels[effectiveType] || effectiveType,
         type: effectiveType,
         path: 'music/' + fname,
         url: fileUrl,
         coverUrl: trackCoverUrl || '',
         filename: fname,
         mime_type: file.type || 'audio/mpeg',
-        artist: 'Огненный ветер',
-        album: 'Сборник',
+        artist: song.author || 'Огненный ветер',
+        album: song.theme || 'Сборник',
         year: '2026'
       };
 
-      // Проверяем по имени файла или пути, чтобы не перезатирать разные файлы одной песни!
+      // Проверяем по имени файла или пути, чтобы не дублировать
       const existingIdx = updatedAudio.findIndex(a => a.filename === fname || a.path === ('music/' + fname));
       if (existingIdx !== -1) {
         updatedAudio[existingIdx] = newTrack;
@@ -9663,14 +9894,14 @@ async handleBatchAudioUpload(files) {
     if (matchedCount > 0) {
       await storage.saveBatch('audio', updatedAudio);
       store.setState({ audio: updatedAudio });
-      AppController.showToast('Связано треков: ' + matchedCount + '. Сохраняем звук в память телефона...');
+      AppController.showToast('Привязано фонограмм: ' + matchedCount + '. Сохраняем звук в память устройства...');
 
       // Асинхронное фоновое сохранение бинарных аудиофайлов в постоянную IndexedDB
       (async () => {
         let savedBlobs = 0;
         for (let bIdx = 0; bIdx < files.length; bIdx++) {
           const f = files[bIdx];
-          if (f.name.toLowerCase().endsWith('.mp3')) {
+          if (/\.(mp3|wav|ogg|m4a|flac)$/i.test(f.name)) {
             const ok = await storage.saveAudioBlob(f.name, f);
             if (ok) savedBlobs++;
           }
@@ -9678,7 +9909,7 @@ async handleBatchAudioUpload(files) {
         AppLogger.info('AUDIO_STORE', 'Сохранено аудиофайлов в локальную постоянную память: ' + savedBlobs);
       })();
     } else {
-      AppController.showToast('Не найдено файлов формата ID_type_title (напр. 0482_studio_название.mp3)');
+      AppController.showToast('Не удалось привязать выбранные аудиофайлы к каталогу песен');
     }
   }
 
@@ -10958,15 +11189,47 @@ async handleBatchAudioUpload(files) {
       
     });
 
-    // 3. Метаданные и заметки (с выпадающим списком ролей)
+    // 3. Метаданные и заметки (с выпадающим списком ролей и загрузкой нот)
     const detailsBox = Renderer.createElement('div', { className: 'song-details-bottom-box' });
-    detailsBox.appendChild(Renderer.createElement('strong', { className: 'text-main text-sm' }, ['Свойства и метаданные песни']));
 
-    const propRow = Renderer.createElement('div', { className: 'property-row mt-2' });
-    if (song.author) propRow.appendChild(Renderer.createElement('span', {}, ['Автор: ' + song.author]));
-    if (song.key) propRow.appendChild(Renderer.createElement('span', {}, ['Основная тональность: ' + song.key]));
-    if (song.tempo) propRow.appendChild(Renderer.createElement('span', {}, ['Темп: ' + song.tempo + ' BPM']));
-    detailsBox.appendChild(propRow);
+    // Разделитель без заголовка "Свойства и метаданные песни"
+    const dividerLine = Renderer.createElement('hr', {
+      style: 'border: none; border-top: 1px solid var(--border-color); margin: 0.5rem 0 0.75rem 0;'
+    });
+    detailsBox.appendChild(dividerLine);
+
+    // Темп (BPM) и теги песни (без автора и тональности)
+    const tagsSource = song.alttheme || song.theme || '';
+    const tagTokens = tagsSource
+      ? tagsSource.split(',').map(t => t.trim()).filter(Boolean)
+      : [];
+
+    const metaRow = Renderer.createElement('div', {
+      className: 'flex items-center gap-2 flex-wrap mb-2',
+      style: 'min-height: 24px;'
+    });
+
+    if (song.tempo) {
+      const tempoBadge = Renderer.createElement('span', {
+        className: 'badge badge-sm',
+        style: 'font-weight: 700; background: var(--bg-card); color: var(--text-main); border: 1px solid var(--border-color); padding: 0.2rem 0.5rem;'
+      }, ['⏱ ' + song.tempo + ' BPM']);
+      metaRow.appendChild(tempoBadge);
+    }
+
+    if (tagTokens.length > 0) {
+      tagTokens.forEach(tStr => {
+        const tagBadge = Renderer.createElement('span', {
+          className: 'badge badge-sm',
+          style: 'background: var(--badge-bg); color: var(--chord-color); border: 1px solid var(--chord-color); padding: 0.2rem 0.5rem; font-weight: 600;'
+        }, ['🏷 ' + tStr]);
+        metaRow.appendChild(tagBadge);
+      });
+    }
+
+    if (metaRow.childNodes.length > 0) {
+      detailsBox.appendChild(metaRow);
+    }
 
     // Выпадающий список выбора роли для заметки
     const roleSelectWrap = Renderer.createElement('div', { className: 'flex items-center gap-2 mt-2', style: 'flex-wrap: wrap;' });
@@ -11008,11 +11271,13 @@ async handleBatchAudioUpload(files) {
     noteInput.addEventListener('mousedown', (e) => e.stopPropagation());
     notesFields.appendChild(noteInput);
 
-    // Дополнительные пользовательские поля и комментарии (user1, user2, user3)
+    // Дополнительные пользовательские поля (user1, user2) и модуль загруженных файлов нот (вместо user3)
     const userFieldsWrap = Renderer.createElement('div', {
-      style: 'display: flex; flex-direction: column; gap: 0.4rem; margin-top: 0.25rem; background: var(--bg-card); padding: 0.6rem; border-radius: 6px; border: 1px dashed var(--border-color);'
+      style: 'display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.25rem; background: var(--bg-card); padding: 0.6rem; border-radius: 6px; border: 1px dashed var(--border-color);'
     });
-    userFieldsWrap.appendChild(Renderer.createElement('div', { style: 'font-size: 0.75rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase;' }, ['Пользовательские метки и комментарии (user1..3):']));
+    userFieldsWrap.appendChild(Renderer.createElement('div', {
+      style: 'font-size: 0.75rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase;'
+    }, ['Пользовательские метки и файлы нот:']));
 
     const u1Input = Renderer.createElement('input', {
       id: 'input-song-user1',
@@ -11028,26 +11293,107 @@ async handleBatchAudioUpload(files) {
       value: song.user2 || '',
       style: 'font-size: 0.82rem; padding: 0.35rem 0.5rem;'
     });
-    const u3Input = Renderer.createElement('input', {
-      id: 'input-song-user3',
-      className: 'input-text',
-      placeholder: 'Метка / комментарий 3 (user3)',
-      value: song.user3 || '',
-      style: 'font-size: 0.82rem; padding: 0.35rem 0.5rem;'
-    });
-    [u1Input, u2Input, u3Input].forEach(inp => {
+    [u1Input, u2Input].forEach(inp => {
       inp.addEventListener('touchstart', (e) => e.stopPropagation(), { passive: true });
       inp.addEventListener('mousedown', (e) => e.stopPropagation());
     });
     userFieldsWrap.appendChild(u1Input);
     userFieldsWrap.appendChild(u2Input);
-    userFieldsWrap.appendChild(u3Input);
+
+    // МОДУЛЬ НОТ И ПРИКРЕПЛЕННЫХ ФАЙЛОВ (Вместо поля user3)
+    let songSheets = [];
+    try {
+      songSheets = JSON.parse(localStorage.getItem('ov_song_sheets_' + song.id) || '[]');
+    } catch(e) {}
+
+    const sheetsBox = Renderer.createElement('div', {
+      id: 'song-attachments-box',
+      style: 'margin-top: 0.25rem; padding: 0.5rem; background: var(--bg-main); border-radius: 6px; border: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 0.4rem;'
+    });
+
+    const sheetsHeader = Renderer.createElement('div', {
+      style: 'display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.4rem;'
+    });
+    sheetsHeader.appendChild(Renderer.createElement('span', {
+      style: 'font-size: 0.8rem; font-weight: 700; color: var(--text-main);'
+    }, ['🎼 Прикрепленные ноты (PDF, JPEG, PNG):']));
+
+    const addSheetBtn = Renderer.createElement('button', {
+      className: 'btn btn-outline btn-sm',
+      dataset: { action: 'trigger-upload-sheet-file' },
+      style: 'padding: 0.2rem 0.6rem; font-size: 0.78rem;'
+    }, ['+ Загрузить ноты']);
+    sheetsHeader.appendChild(addSheetBtn);
+    sheetsBox.appendChild(sheetsHeader);
+
+    const hiddenSheetInput = Renderer.createElement('input', {
+      type: 'file',
+      id: 'input-upload-song-sheet',
+      accept: '.pdf,image/jpeg,image/png,image/webp,.jpg,.jpeg,.png',
+      style: 'display: none;'
+    });
+    hiddenSheetInput.addEventListener('change', async (e) => {
+      const file = e.target.files && e.target.files[0];
+      if (!file) return;
+      try {
+        const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+        const reader = new FileReader();
+        reader.onload = () => {
+          const newSheet = {
+            id: 'sheet-' + Date.now(),
+            name: file.name,
+            type: isPdf ? 'pdf' : 'image',
+            dataUrl: reader.result
+          };
+          const curList = JSON.parse(localStorage.getItem('ov_song_sheets_' + song.id) || '[]');
+          curList.push(newSheet);
+          localStorage.setItem('ov_song_sheets_' + song.id, JSON.stringify(curList));
+          AppController.showToast('✓ Файл нот добавлен: ' + file.name);
+          app.renderSongDetailsView(document.getElementById('song-detail-container'), song);
+        };
+        reader.readAsDataURL(file);
+      } catch(err) {
+        AppController.showToast('Ошибка загрузки нот: ' + err.message);
+      }
+    });
+    sheetsBox.appendChild(hiddenSheetInput);
+
+    if (songSheets.length > 0) {
+      const sheetsList = Renderer.createElement('div', {
+        style: 'display: flex; flex-direction: column; gap: 0.35rem; margin-top: 0.25rem;'
+      });
+      songSheets.forEach((sh, idx) => {
+        const itemRow = Renderer.createElement('div', {
+          style: 'display: flex; align-items: center; justify-content: space-between; background: var(--bg-card); padding: 0.35rem 0.5rem; border-radius: 4px; border: 1px solid var(--border-color);'
+        });
+        const nameBtn = Renderer.createElement('button', {
+          style: 'background: none; border: none; padding: 0; color: var(--chord-color); font-weight: 600; font-size: 0.8rem; cursor: pointer; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 75%;',
+          dataset: { action: 'preview-sheet-item', sheetIndex: String(idx) }
+        }, [(sh.type === 'pdf' ? '📄 ' : '🖼 ') + sh.name]);
+        itemRow.appendChild(nameBtn);
+
+        const delBtn = Renderer.createElement('button', {
+          style: 'background: none; border: none; color: #ef4444; font-size: 0.8rem; cursor: pointer; padding: 0 0.3rem;',
+          title: 'Удалить этот файл нот',
+          dataset: { action: 'delete-sheet-item', sheetIndex: String(idx) }
+        }, ['✕']);
+        itemRow.appendChild(delBtn);
+        sheetsList.appendChild(itemRow);
+      });
+      sheetsBox.appendChild(sheetsList);
+    } else {
+      sheetsBox.appendChild(Renderer.createElement('div', {
+        style: 'font-size: 0.75rem; color: var(--text-muted); font-style: italic;'
+      }, ['Нет прикрепленных файлов партитур или аккордов']));
+    }
+
+    userFieldsWrap.appendChild(sheetsBox);
     notesFields.appendChild(userFieldsWrap);
 
     const saveNoteBtn = Renderer.createElement('button', {
       className: 'btn btn-primary mt-2',
       dataset: { action: 'save-user-note' }
-    }, ['💾 Сохранить заметку роли и метки user1..3']);
+    }, ['💾 Сохранить заметку роли и метки user1..2']);
     notesFields.appendChild(saveNoteBtn);
     detailsBox.appendChild(notesFields);
     container.appendChild(detailsBox);
@@ -11825,55 +12171,6 @@ async handleBatchAudioUpload(files) {
     });
     fontSelectWrap.appendChild(fontSelect);
     fontCard.appendChild(fontSelectWrap);
-
-    // НАСТРОЙКИ ШРИФТА РЕЖИМА КОНЦЕРТ
-    const concertControlsWrap = Renderer.createElement('div', {
-      style: 'margin-top: 1rem; padding-top: 0.75rem; border-top: 1px dashed var(--border-color); display: flex; flex-direction: column; gap: 0.75rem;'
-    });
-    concertControlsWrap.appendChild(Renderer.createElement('div', {
-      style: 'font-size: 0.85rem; font-weight: 700; color: var(--text-main);'
-    }, ['🎤 Тонкая настройка шрифта Концертного режима:']));
-
-    // 1) Поправка к эффективной длине строки (+- символов)
-    const offsetRow = Renderer.createElement('div', { style: 'display: flex; align-items: center; justify-content: space-between; gap: 0.5rem;' });
-    offsetRow.appendChild(Renderer.createElement('span', { style: 'font-size: 0.82rem; color: var(--text-muted);' }, ['Поправка длины строки (символов):']));
-    
-    const offsetBtns = Renderer.createElement('div', { style: 'display: flex; align-items: center; gap: 0.4rem;' });
-    const btnOffsetMinus = Renderer.createElement('button', { className: 'btn btn-outline btn-sm', dataset: { action: 'concert-offset-minus' } }, ['-1']);
-    const offsetValLabel = Renderer.createElement('span', { id: 'concert-offset-val-label', style: 'font-weight: 700; min-width: 30px; text-align: center;' }, [
-      (state.concertLenOffset > 0 ? '+' : '') + (state.concertLenOffset || 0)
-    ]);
-    const btnOffsetPlus = Renderer.createElement('button', { className: 'btn btn-outline btn-sm', dataset: { action: 'concert-offset-plus' } }, ['+1']);
-    offsetBtns.appendChild(btnOffsetMinus);
-    offsetBtns.appendChild(offsetValLabel);
-    offsetBtns.appendChild(btnOffsetPlus);
-    offsetRow.appendChild(offsetBtns);
-    concertControlsWrap.appendChild(offsetRow);
-
-    // 2) Межсимвольный интервал (0.5 - 1.5)
-    const spacingRow = Renderer.createElement('div', { style: 'display: flex; align-items: center; justify-content: space-between; gap: 0.5rem;' });
-    spacingRow.appendChild(Renderer.createElement('span', { style: 'font-size: 0.82rem; color: var(--text-muted);' }, ['Межсимвольный интервал (0.5 - 1.5):']));
-
-    const spacingWrap = Renderer.createElement('div', { style: 'display: flex; align-items: center; gap: 0.5rem;' });
-    const spacingInput = Renderer.createElement('input', {
-      type: 'range',
-      id: 'range-concert-letter-spacing',
-      min: '0.5',
-      max: '1.5',
-      step: '0.1',
-      value: String(state.concertLetterSpacing || 1.0),
-      dataset: { action: 'change-concert-letter-spacing' },
-      style: 'width: 100px; cursor: pointer;'
-    });
-    const spacingValLabel = Renderer.createElement('span', { id: 'concert-spacing-val-label', style: 'font-weight: 700; min-width: 32px; text-align: right; font-size: 0.82rem;' }, [
-      (state.concertLetterSpacing || 1.0).toFixed(1)
-    ]);
-    spacingWrap.appendChild(spacingInput);
-    spacingWrap.appendChild(spacingValLabel);
-    spacingRow.appendChild(spacingWrap);
-    concertControlsWrap.appendChild(spacingRow);
-
-    fontCard.appendChild(concertControlsWrap);
     wrap.appendChild(fontCard);
 
 
@@ -12000,33 +12297,23 @@ async handleBatchAudioUpload(files) {
 
     // Инициализация базы данных и очистка для Kiosk-mode
     const storageCard = Renderer.createElement('div', { className: 'song-card', style: 'flex-direction: column; align-items: stretch; gap: 0.75rem;' });
-    storageCard.appendChild(Renderer.createElement('h3', { className: 'text-main text-sm' }, ['Хранилище данных и Инициализация']));
+    storageCard.appendChild(Renderer.createElement('h3', { className: 'text-main text-sm' }, ['💾 Хранилище данных']));
     storageCard.appendChild(Renderer.createElement('div', { className: 'text-sm text-muted' }, [
-      'Приложение подготовлено для работы в режиме киоска. При первом запуске база пуста, чтобы не перегружать память. Нажмите кнопку ниже для загрузки полного каталога из встроенного дистрибутива.'
+      'Управление локальными данными приложения и загрузка обновленного каталога репертуара.'
     ]));
 
     const initBtns = Renderer.createElement('div', { className: 'flex gap-2 mt-2 flex-wrap' }, [
       Renderer.createElement('button', {
-        className: 'btn btn-primary',
-        dataset: { action: 'initialize-database' },
-        title: 'Подтянуть полную базу песен'
-      }, ['🚀 Провести инициализацию базы']),
-      Renderer.createElement('button', {
         className: 'btn btn-outline',
         dataset: { action: 'clear-all-local-cache' },
         style: 'border-color: #ef4444; color: #ef4444;',
-        title: 'Очистить старый кэш, логи и перезапустить PWA без потери заметок и списков'
-      }, ['🧹 Очистить кэш и логи (сохранив списки)']),
+        title: 'Очистить кэш, логи и перезапустить PWA без потери списков и музыки'
+      }, ['🧹 Очистить кэш и логи (сохранив списки и музыку)']),
       Renderer.createElement('button', {
         className: 'btn btn-outline',
         dataset: { action: 'import-external-songs-csv' },
-        title: 'Выбрать файл songs.csv на телефоне/диске и обновить каталог'
-      }, ['📄 Загрузить свой songs.csv']),
-      Renderer.createElement('button', {
-        className: 'btn btn-outline text-muted',
-        dataset: { action: 'clear-database-complete' },
-        title: 'Очистить сохраненные данные на этом устройстве'
-      }, ['🗑 Очистить базу'])
+        title: 'Выбрать файл songs.csv на устройстве и обновить каталог'
+      }, ['📄 Загрузить свой songs.csv'])
     ]);
     storageCard.appendChild(initBtns);
     wrap.appendChild(storageCard);

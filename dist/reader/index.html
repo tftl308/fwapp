@@ -6835,6 +6835,73 @@ class UpdateEngine {
   }
 }
 
+function openSheetPreviewModal(sheet) {
+  const existing = document.getElementById('sheet-preview-modal-overlay');
+  if (existing) existing.remove();
+
+  const overlay = document.createElement('div');
+  overlay.id = 'sheet-preview-modal-overlay';
+  overlay.className = 'modal-overlay';
+  overlay.style.zIndex = '9999';
+
+  const modal = document.createElement('div');
+  modal.className = 'modal-content';
+  modal.style.maxWidth = '92vw';
+  modal.style.width = '800px';
+  modal.style.maxHeight = '90vh';
+  modal.style.display = 'flex';
+  modal.style.flexDirection = 'column';
+  modal.style.padding = '1rem';
+  modal.style.background = 'var(--bg-main)';
+  modal.style.borderRadius = '12px';
+  modal.style.boxShadow = '0 10px 30px rgba(0,0,0,0.5)';
+
+  const header = document.createElement('div');
+  header.className = 'flex items-center justify-between mb-2';
+  header.innerHTML = '<strong style="font-size: 1rem; color: var(--text-main); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">🎼 ' + (sheet.name || 'Ноты') + '</strong>';
+
+  const closeBtn = document.createElement('button');
+  closeBtn.className = 'btn btn-outline btn-sm';
+  closeBtn.textContent = '✕ Закрыть';
+  closeBtn.onclick = () => overlay.remove();
+  header.appendChild(closeBtn);
+  modal.appendChild(header);
+
+  const bodyWrap = document.createElement('div');
+  bodyWrap.style.flex = '1';
+  bodyWrap.style.minHeight = '300px';
+  bodyWrap.style.overflow = 'auto';
+  bodyWrap.style.display = 'flex';
+  bodyWrap.style.alignItems = 'center';
+  bodyWrap.style.justifyContent = 'center';
+  bodyWrap.style.background = '#1e293b';
+  bodyWrap.style.borderRadius = '8px';
+
+  if (sheet.type === 'pdf') {
+    const embed = document.createElement('iframe');
+    embed.src = sheet.dataUrl;
+    embed.style.width = '100%';
+    embed.style.height = '70vh';
+    embed.style.border = 'none';
+    bodyWrap.appendChild(embed);
+  } else {
+    const img = document.createElement('img');
+    img.src = sheet.dataUrl;
+    img.style.maxWidth = '100%';
+    img.style.maxHeight = '70vh';
+    img.style.objectFit = 'contain';
+    bodyWrap.appendChild(img);
+  }
+  modal.appendChild(bodyWrap);
+
+  overlay.onclick = (e) => {
+    if (e.target === overlay) overlay.remove();
+  };
+  overlay.appendChild(modal);
+  document.body.appendChild(overlay);
+}
+window.openSheetPreviewModal = openSheetPreviewModal;
+
 class AppController {
   constructor() {
     this.searchEngine = null;
@@ -8459,7 +8526,6 @@ case 'clear-search': {
         const noteText = document.getElementById('input-profile-note')?.value || '';
         const u1 = document.getElementById('input-song-user1')?.value || '';
         const u2 = document.getElementById('input-song-user2')?.value || '';
-        const u3 = document.getElementById('input-song-user3')?.value || '';
 
         const song = state.songs.find(s => s.id === songId);
         if (!song) return;
@@ -8471,7 +8537,6 @@ case 'clear-search': {
         song.notes = updatedRawNotes;
         song.user1 = u1.trim();
         song.user2 = u2.trim();
-        song.user3 = u3.trim();
 
         // Сохраняем в постоянную базу песен
         await storage.putOne('songs', song);
@@ -8481,7 +8546,7 @@ case 'clear-search': {
           const notesKey = 'song_notes_' + songId + '_' + effectiveProfile;
           localStorage.setItem(notesKey, noteText);
           const allUserNotes = JSON.parse(localStorage.getItem('ov_all_user_notes') || '{}');
-          allUserNotes[songId] = { notes: song.notes, user1: song.user1, user2: song.user2, user3: song.user3 };
+          allUserNotes[songId] = { notes: song.notes, user1: song.user1, user2: song.user2, user3: song.user3 || '' };
           localStorage.setItem('ov_all_user_notes', JSON.stringify(allUserNotes));
         } catch(e) {}
 
@@ -8492,6 +8557,38 @@ case 'clear-search': {
         this.searchEngine.updateIndex(updatedSongs);
         store.setState({ songs: updatedSongs });
         AppController.showToast('✓ Заметка сохранена для роли [' + (MUSICIAN_PROFILES.find(p => p.id === effectiveProfile)?.label || effectiveProfile) + ']!');
+        break;
+      }
+
+      case 'trigger-upload-sheet-file': {
+        const sheetInput = document.getElementById('input-upload-song-sheet');
+        if (sheetInput) sheetInput.click();
+        break;
+      }
+
+      case 'preview-sheet-item': {
+        const sheetIdx = parseInt(el.dataset.sheetIndex, 10);
+        const songId = state.currentSongId;
+        const songSheets = JSON.parse(localStorage.getItem('ov_song_sheets_' + songId) || '[]');
+        if (songSheets[sheetIdx] && window.openSheetPreviewModal) {
+          window.openSheetPreviewModal(songSheets[sheetIdx]);
+        }
+        break;
+      }
+
+      case 'delete-sheet-item': {
+        const sheetIdx = parseInt(el.dataset.sheetIndex, 10);
+        const songId = state.currentSongId;
+        const songSheets = JSON.parse(localStorage.getItem('ov_song_sheets_' + songId) || '[]');
+        if (songSheets[sheetIdx]) {
+          if (confirm('Удалить файл нот "' + songSheets[sheetIdx].name + '"?')) {
+            songSheets.splice(sheetIdx, 1);
+            localStorage.setItem('ov_song_sheets_' + songId, JSON.stringify(songSheets));
+            AppController.showToast('Файл нот удален');
+            const song = state.songs.find(s => s.id === songId);
+            if (song) this.renderSongDetailsView(document.getElementById('song-detail-container'), song);
+          }
+        }
         break;
       }
 
@@ -10763,15 +10860,47 @@ async handleBatchAudioUpload(files) {
       
     });
 
-    // 3. Метаданные и заметки (с выпадающим списком ролей)
+    // 3. Метаданные и заметки (с выпадающим списком ролей и загрузкой нот)
     const detailsBox = Renderer.createElement('div', { className: 'song-details-bottom-box' });
-    detailsBox.appendChild(Renderer.createElement('strong', { className: 'text-main text-sm' }, ['Свойства и метаданные песни']));
 
-    const propRow = Renderer.createElement('div', { className: 'property-row mt-2' });
-    if (song.author) propRow.appendChild(Renderer.createElement('span', {}, ['Автор: ' + song.author]));
-    if (song.key) propRow.appendChild(Renderer.createElement('span', {}, ['Основная тональность: ' + song.key]));
-    if (song.tempo) propRow.appendChild(Renderer.createElement('span', {}, ['Темп: ' + song.tempo + ' BPM']));
-    detailsBox.appendChild(propRow);
+    // Разделитель без заголовка "Свойства и метаданные песни"
+    const dividerLine = Renderer.createElement('hr', {
+      style: 'border: none; border-top: 1px solid var(--border-color); margin: 0.5rem 0 0.75rem 0;'
+    });
+    detailsBox.appendChild(dividerLine);
+
+    // Темп (BPM) и теги песни (без автора и тональности)
+    const tagsSource = song.alttheme || song.theme || '';
+    const tagTokens = tagsSource
+      ? tagsSource.split(',').map(t => t.trim()).filter(Boolean)
+      : [];
+
+    const metaRow = Renderer.createElement('div', {
+      className: 'flex items-center gap-2 flex-wrap mb-2',
+      style: 'min-height: 24px;'
+    });
+
+    if (song.tempo) {
+      const tempoBadge = Renderer.createElement('span', {
+        className: 'badge badge-sm',
+        style: 'font-weight: 700; background: var(--bg-card); color: var(--text-main); border: 1px solid var(--border-color); padding: 0.2rem 0.5rem;'
+      }, ['⏱ ' + song.tempo + ' BPM']);
+      metaRow.appendChild(tempoBadge);
+    }
+
+    if (tagTokens.length > 0) {
+      tagTokens.forEach(tStr => {
+        const tagBadge = Renderer.createElement('span', {
+          className: 'badge badge-sm',
+          style: 'background: var(--badge-bg); color: var(--chord-color); border: 1px solid var(--chord-color); padding: 0.2rem 0.5rem; font-weight: 600;'
+        }, ['🏷 ' + tStr]);
+        metaRow.appendChild(tagBadge);
+      });
+    }
+
+    if (metaRow.childNodes.length > 0) {
+      detailsBox.appendChild(metaRow);
+    }
 
     // Выпадающий список выбора роли для заметки
     const roleSelectWrap = Renderer.createElement('div', { className: 'flex items-center gap-2 mt-2', style: 'flex-wrap: wrap;' });
@@ -10813,11 +10942,13 @@ async handleBatchAudioUpload(files) {
     noteInput.addEventListener('mousedown', (e) => e.stopPropagation());
     notesFields.appendChild(noteInput);
 
-    // Дополнительные пользовательские поля и комментарии (user1, user2, user3)
+    // Дополнительные пользовательские поля (user1, user2) и модуль загруженных файлов нот (вместо user3)
     const userFieldsWrap = Renderer.createElement('div', {
-      style: 'display: flex; flex-direction: column; gap: 0.4rem; margin-top: 0.25rem; background: var(--bg-card); padding: 0.6rem; border-radius: 6px; border: 1px dashed var(--border-color);'
+      style: 'display: flex; flex-direction: column; gap: 0.5rem; margin-top: 0.25rem; background: var(--bg-card); padding: 0.6rem; border-radius: 6px; border: 1px dashed var(--border-color);'
     });
-    userFieldsWrap.appendChild(Renderer.createElement('div', { style: 'font-size: 0.75rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase;' }, ['Пользовательские метки и комментарии (user1..3):']));
+    userFieldsWrap.appendChild(Renderer.createElement('div', {
+      style: 'font-size: 0.75rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase;'
+    }, ['Пользовательские метки и файлы нот:']));
 
     const u1Input = Renderer.createElement('input', {
       id: 'input-song-user1',
@@ -10833,30 +10964,107 @@ async handleBatchAudioUpload(files) {
       value: song.user2 || '',
       style: 'font-size: 0.82rem; padding: 0.35rem 0.5rem;'
     });
-    const u3Input = Renderer.createElement('input', {
-      id: 'input-song-user3',
-      className: 'input-text',
-      placeholder: 'Метка / комментарий 3 (user3)',
-      value: song.user3 || '',
-      style: 'font-size: 0.82rem; padding: 0.35rem 0.5rem;'
-    });
-    [u1Input, u2Input, u3Input].forEach(inp => {
-      inp.addEventListener('touchstart', (e) => e.stopPropagation(), { passive: true });
-      inp.addEventListener('mousedown', (e) => e.stopPropagation());
-    });
-    [u1Input, u2Input, u3Input].forEach(inp => {
+    [u1Input, u2Input].forEach(inp => {
       inp.addEventListener('touchstart', (e) => e.stopPropagation(), { passive: true });
       inp.addEventListener('mousedown', (e) => e.stopPropagation());
     });
     userFieldsWrap.appendChild(u1Input);
     userFieldsWrap.appendChild(u2Input);
-    userFieldsWrap.appendChild(u3Input);
+
+    // МОДУЛЬ НОТ И ПРИКРЕПЛЕННЫХ ФАЙЛОВ (Вместо поля user3)
+    let songSheets = [];
+    try {
+      songSheets = JSON.parse(localStorage.getItem('ov_song_sheets_' + song.id) || '[]');
+    } catch(e) {}
+
+    const sheetsBox = Renderer.createElement('div', {
+      id: 'song-attachments-box',
+      style: 'margin-top: 0.25rem; padding: 0.5rem; background: var(--bg-main); border-radius: 6px; border: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 0.4rem;'
+    });
+
+    const sheetsHeader = Renderer.createElement('div', {
+      style: 'display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 0.4rem;'
+    });
+    sheetsHeader.appendChild(Renderer.createElement('span', {
+      style: 'font-size: 0.8rem; font-weight: 700; color: var(--text-main);'
+    }, ['🎼 Прикрепленные ноты (PDF, JPEG, PNG):']));
+
+    const addSheetBtn = Renderer.createElement('button', {
+      className: 'btn btn-outline btn-sm',
+      dataset: { action: 'trigger-upload-sheet-file' },
+      style: 'padding: 0.2rem 0.6rem; font-size: 0.78rem;'
+    }, ['+ Загрузить ноты']);
+    sheetsHeader.appendChild(addSheetBtn);
+    sheetsBox.appendChild(sheetsHeader);
+
+    const hiddenSheetInput = Renderer.createElement('input', {
+      type: 'file',
+      id: 'input-upload-song-sheet',
+      accept: '.pdf,image/jpeg,image/png,image/webp,.jpg,.jpeg,.png',
+      style: 'display: none;'
+    });
+    hiddenSheetInput.addEventListener('change', async (e) => {
+      const file = e.target.files && e.target.files[0];
+      if (!file) return;
+      try {
+        const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
+        const reader = new FileReader();
+        reader.onload = () => {
+          const newSheet = {
+            id: 'sheet-' + Date.now(),
+            name: file.name,
+            type: isPdf ? 'pdf' : 'image',
+            dataUrl: reader.result
+          };
+          const curList = JSON.parse(localStorage.getItem('ov_song_sheets_' + song.id) || '[]');
+          curList.push(newSheet);
+          localStorage.setItem('ov_song_sheets_' + song.id, JSON.stringify(curList));
+          AppController.showToast('✓ Файл нот добавлен: ' + file.name);
+          app.renderSongDetailsView(document.getElementById('song-detail-container'), song);
+        };
+        reader.readAsDataURL(file);
+      } catch(err) {
+        AppController.showToast('Ошибка загрузки нот: ' + err.message);
+      }
+    });
+    sheetsBox.appendChild(hiddenSheetInput);
+
+    if (songSheets.length > 0) {
+      const sheetsList = Renderer.createElement('div', {
+        style: 'display: flex; flex-direction: column; gap: 0.35rem; margin-top: 0.25rem;'
+      });
+      songSheets.forEach((sh, idx) => {
+        const itemRow = Renderer.createElement('div', {
+          style: 'display: flex; align-items: center; justify-content: space-between; background: var(--bg-card); padding: 0.35rem 0.5rem; border-radius: 4px; border: 1px solid var(--border-color);'
+        });
+        const nameBtn = Renderer.createElement('button', {
+          style: 'background: none; border: none; padding: 0; color: var(--chord-color); font-weight: 600; font-size: 0.8rem; cursor: pointer; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 75%;',
+          dataset: { action: 'preview-sheet-item', sheetIndex: String(idx) }
+        }, [(sh.type === 'pdf' ? '📄 ' : '🖼 ') + sh.name]);
+        itemRow.appendChild(nameBtn);
+
+        const delBtn = Renderer.createElement('button', {
+          style: 'background: none; border: none; color: #ef4444; font-size: 0.8rem; cursor: pointer; padding: 0 0.3rem;',
+          title: 'Удалить этот файл нот',
+          dataset: { action: 'delete-sheet-item', sheetIndex: String(idx) }
+        }, ['✕']);
+        itemRow.appendChild(delBtn);
+        sheetsList.appendChild(itemRow);
+      });
+      sheetsBox.appendChild(sheetsList);
+    } else {
+      sheetsBox.appendChild(Renderer.createElement('div', {
+        style: 'font-size: 0.75rem; color: var(--text-muted); font-style: italic;'
+      }, ['Нет прикрепленных файлов партитур или аккордов']));
+    }
+
+    userFieldsWrap.appendChild(sheetsBox);
     notesFields.appendChild(userFieldsWrap);
 
     const saveNoteBtn = Renderer.createElement('button', {
       className: 'btn btn-primary mt-2',
       dataset: { action: 'save-user-note' }
-    }, ['💾 Сохранить заметку роли и метки user1..3']);
+    }, ['💾 Сохранить заметку роли и метки user1..2']);
     notesFields.appendChild(saveNoteBtn);
     detailsBox.appendChild(notesFields);
     container.appendChild(detailsBox);
@@ -11644,54 +11852,7 @@ async handleBatchAudioUpload(files) {
     fontSelectWrap.appendChild(fontSelect);
     fontCard.appendChild(fontSelectWrap);
 
-    // НАСТРОЙКИ ШРИФТА РЕЖИМА КОНЦЕРТ
-    const concertControlsWrap = Renderer.createElement('div', {
-      style: 'margin-top: 1rem; padding-top: 0.75rem; border-top: 1px dashed var(--border-color); display: flex; flex-direction: column; gap: 0.75rem;'
-    });
-    concertControlsWrap.appendChild(Renderer.createElement('div', {
-      style: 'font-size: 0.85rem; font-weight: 700; color: var(--text-main);'
-    }, ['🎤 Тонкая настройка шрифта Концертного режима:']));
-
-    // 1) Поправка к эффективной длине строки (+- символов)
-    const offsetRow = Renderer.createElement('div', { style: 'display: flex; align-items: center; justify-content: space-between; gap: 0.5rem;' });
-    offsetRow.appendChild(Renderer.createElement('span', { style: 'font-size: 0.82rem; color: var(--text-muted);' }, ['Поправка длины строки (символов):']));
     
-    const offsetBtns = Renderer.createElement('div', { style: 'display: flex; align-items: center; gap: 0.4rem;' });
-    const btnOffsetMinus = Renderer.createElement('button', { className: 'btn btn-outline btn-sm', dataset: { action: 'concert-offset-minus' } }, ['-1']);
-    const offsetValLabel = Renderer.createElement('span', { id: 'concert-offset-val-label', style: 'font-weight: 700; min-width: 30px; text-align: center;' }, [
-      (state.concertLenOffset > 0 ? '+' : '') + (state.concertLenOffset || 0)
-    ]);
-    const btnOffsetPlus = Renderer.createElement('button', { className: 'btn btn-outline btn-sm', dataset: { action: 'concert-offset-plus' } }, ['+1']);
-    offsetBtns.appendChild(btnOffsetMinus);
-    offsetBtns.appendChild(offsetValLabel);
-    offsetBtns.appendChild(btnOffsetPlus);
-    offsetRow.appendChild(offsetBtns);
-    concertControlsWrap.appendChild(offsetRow);
-
-    // 2) Межсимвольный интервал (0.5 - 1.5)
-    const spacingRow = Renderer.createElement('div', { style: 'display: flex; align-items: center; justify-content: space-between; gap: 0.5rem;' });
-    spacingRow.appendChild(Renderer.createElement('span', { style: 'font-size: 0.82rem; color: var(--text-muted);' }, ['Межсимвольный интервал (0.5 - 1.5):']));
-
-    const spacingWrap = Renderer.createElement('div', { style: 'display: flex; align-items: center; gap: 0.5rem;' });
-    const spacingInput = Renderer.createElement('input', {
-      type: 'range',
-      id: 'range-concert-letter-spacing',
-      min: '0.5',
-      max: '1.5',
-      step: '0.1',
-      value: String(state.concertLetterSpacing || 1.0),
-      dataset: { action: 'change-concert-letter-spacing' },
-      style: 'width: 100px; cursor: pointer;'
-    });
-    const spacingValLabel = Renderer.createElement('span', { id: 'concert-spacing-val-label', style: 'font-weight: 700; min-width: 32px; text-align: right; font-size: 0.82rem;' }, [
-      (state.concertLetterSpacing || 1.0).toFixed(1)
-    ]);
-    spacingWrap.appendChild(spacingInput);
-    spacingWrap.appendChild(spacingValLabel);
-    spacingRow.appendChild(spacingWrap);
-    concertControlsWrap.appendChild(spacingRow);
-
-    fontCard.appendChild(concertControlsWrap);
     wrap.appendChild(fontCard);
 
 
