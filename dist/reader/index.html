@@ -8763,6 +8763,18 @@ case 'clear-search': {
         break;
       }
 
+            case 'open-song-in-editor': {
+        if (event && event.stopPropagation) event.stopPropagation();
+        const targetSongId = el.dataset.songId || state.currentSongId;
+        if (targetSongId) {
+          window._activeEditSongId = targetSongId;
+          window._activeEditModel = null;
+          store.setState({ currentTab: 'editor', currentSongId: targetSongId });
+          this.renderCurrentView();
+        }
+        break;
+      }
+
       case 'add-song-to-current-playlist': {
         if (event && event.stopPropagation) event.stopPropagation();
         const targetSongId = el.dataset.songId || state.currentSongId;
@@ -10926,10 +10938,19 @@ async handleBatchAudioUpload(files) {
     transWrap.appendChild(transUp);
     paramsWrap.appendChild(transWrap);
 
+    // Кнопка перехода в редактор песни (слева от плюсика)
+    const openEditorBtn = Renderer.createElement('button', {
+      className: 'btn btn-outline btn-icon',
+      style: 'font-size: 0.95rem; min-width: 34px; height: 34px; border-radius: 0.4rem; margin-left: auto; flex-shrink: 0;',
+      dataset: { action: 'open-song-in-editor', songId: song.id },
+      title: 'Открыть эту песню в редакторе (Touch / OpenSong)'
+    }, ['✏️']);
+    paramsWrap.appendChild(openEditorBtn);
+
     // Плюсик для добавления текущей песни в активный список сразу после блока транспонирования
     const addCurrentToPlaylistBtn = Renderer.createElement('button', {
       className: 'btn btn-primary btn-icon',
-      style: 'font-weight: 800; font-size: 1.1rem; min-width: 34px; height: 34px; border-radius: 0.4rem; margin-left: auto; flex-shrink: 0;',
+      style: 'font-weight: 800; font-size: 1.1rem; min-width: 34px; height: 34px; border-radius: 0.4rem; margin-left: 0.4rem; flex-shrink: 0;',
       dataset: { action: 'add-song-to-current-playlist', songId: song.id },
       title: 'Добавить эту песню в текущий список'
     }, ['+']);
