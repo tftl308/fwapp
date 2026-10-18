@@ -4514,13 +4514,17 @@ ${lyricsBody}
         );
 
         if (existingIdx >= 0) {
-          dbSongs[existingIdx].body_chordpro = newSong.body_chordpro || dbSongs[existingIdx].body_chordpro;
-          dbSongs[existingIdx].body_plain = newSong.body_plain || dbSongs[existingIdx].body_plain;
-          if (newSong.key_default) dbSongs[existingIdx].key_default = newSong.key_default;
-          if (newSong.capo) dbSongs[existingIdx].capo = newSong.capo;
-          if (newSong.tempo) dbSongs[existingIdx].tempo = newSong.tempo;
+          const tgt = dbSongs[existingIdx];
+          tgt.chordpro = newSong.body_chordpro || tgt.chordpro;
+          tgt.lyrics = newSong.body_plain || tgt.lyrics;
+          if (newSong.key_default) tgt.key = newSong.key_default;
+          if (newSong.capo) tgt.capo = newSong.capo;
+          if (newSong.tempo) tgt.tempo = newSong.tempo;
           updated++;
         } else {
+          newSong.chordpro = newSong.body_chordpro || "";
+          newSong.lyrics = newSong.body_plain || "";
+          newSong.key = newSong.key_default || "";
           dbSongs.push(newSong);
           added++;
         }
@@ -4649,7 +4653,10 @@ ${lyricsBody}
         }
       });
 
+      dbSongs.sort((a, b) => (parseInt(a.id, 10) || 0) - (parseInt(b.id, 10) || 0));
       await saveLocalState();
+      renderCatalog();
+      populateEditorSongSelector();
       if (collisions.length > 0) {
         alert(`Присвоено ID для ${assigned} песен, но обнаружено ${collisions.length} коллизий двойных ID:\n` + collisions.slice(0, 10).join('\n') + (collisions.length > 10 ? `\n...и ещё ${collisions.length - 10}` : ''));
       } else {
