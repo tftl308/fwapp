@@ -7228,10 +7228,12 @@ class AppController {
     store.subscribe((state) => this.onStateChange(state));
     this.renderCurrentView();
 
-    // Мгновенное плавное скрытие стартового экрана
-    if (typeof window.dismissSplashScreen === "function") {
-      window.dismissSplashScreen();
-    }
+    // Плавное скрытие стартового экрана через 1 секунду, чтобы успел пройти красивый дождь нот
+    setTimeout(() => {
+      if (typeof window.dismissSplashScreen === "function") {
+        window.dismissSplashScreen();
+      }
+    }, 1000);
 
     // Автоматический переход в полноэкранный режим при запуске как PWA
     const isStandalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
