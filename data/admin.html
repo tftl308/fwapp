@@ -327,13 +327,14 @@ https://github.com/nodeca/pako/blob/main/LICENSE
     </div>
   </header>
 
-  <nav class="nav-tabs">
+    <nav class="nav-tabs">
     <button class="tab-btn active" data-tab="catalog">📚 1. Реестр песен (<span id="song-count">0</span>)</button>
     <button class="tab-btn" data-tab="editor">✏️ 2. Редактор песни</button>
     <button class="tab-btn" data-tab="notes">📝 3. Редактор пользовательских заметок</button>
     <button class="tab-btn" data-tab="playlists">📋 4. Редактор канонических списков</button>
-    <button class="tab-btn" data-tab="docx">📄 5. Импорт сборника DOCX и порядка</button>
-    <button class="tab-btn" data-tab="audio">🎵 6. Преобразование аудио в папке</button>
+    <button class="tab-btn" data-tab="docx-songs">📄 5. Импорт сборника DOCX (Аккорды и Тексты)</button>
+    <button class="tab-btn" data-tab="docx-ids">🔢 6. Импорт файла DOCX (Порядок и ID выхода)</button>
+    <button class="tab-btn" data-tab="audio">🎵 7. Преобразование аудио в папке</button>
   </nav>
 
   <!-- ========================================================= -->
@@ -559,33 +560,198 @@ https://github.com/nodeca/pako/blob/main/LICENSE
   <!-- ========================================================= -->
   <!-- TAB 5: ИМПОРТ СБОРНИКА DOCX И ПОРЯДКА ВЫХОДА               -->
   <!-- ========================================================= -->
-  <section id="tab-docx" class="tab-pane" style="display: none;">
+  <section id="tab-docx-songs" class="tab-pane" style="display: none;">
     <div class="card">
-      <h3 style="margin-bottom: 0.5rem;">Импорт сборника DOCX и сопоставление порядка выхода</h3>
-      <p style="color: var(--muted); font-size: 0.85rem; margin-bottom: 1rem;">
-        Система принимает файл сборника с текстами и аккордами DOCX, извлекает песни, сопоставляет со списком канонического порядка выхода и генерирует чистый структурированный songs.csv без дубликатов и потери номеров.
-      </p>
-
-      <div class="grid-2">
-        <div style="background: #090d16; padding: 1rem; border-radius: 6px; border: 1px solid var(--border);">
-          <label style="font-weight: 700; color: #38bdf8;">1. Файл сборника песен (.docx):</label>
-          <input type="file" id="input-docx-book" accept=".docx" class="form-control" style="margin-top: 0.3rem;">
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.8rem; flex-wrap: wrap; gap: 0.5rem;">
+        <div>
+          <h2><span class="step-number">1</span> Оцифровка DOCX & OpenSong/ChordPro Студия</h2>
+          <p style="color: var(--muted); font-size: 0.88rem; margin-top: 0.3rem;">
+            Геометрическое выравнивание пропорционального шрифта Times New Roman (Dynamic Programming), визуальный Drag-and-Drop редактор аккордов и экспорт в OpenSong, ChordPro, CSV и печать PDF/DOCX.
+          </p>
         </div>
-
-        <div style="background: #090d16; padding: 1rem; border-radius: 6px; border: 1px solid var(--border);">
-          <label style="font-weight: 700; color: #38bdf8;">2. Файл порядка выхода песен (.docx / .csv / .txt):</label>
-          <input type="file" id="input-docx-order" accept=".docx,.csv,.txt" class="form-control" style="margin-top: 0.3rem;">
+        <div style="display: flex; gap: 0.5rem; align-items: center;">
+          <span class="badge badge-info">Geometric DP Align v2.0</span>
+          <span class="converter-stat-badge badge-conf-green" id="stat-high-conf" title="Высокая уверенность (conf > 0.8)">🟢 0</span>
+          <span class="converter-stat-badge badge-conf-yellow" id="stat-med-conf" title="Средняя уверенность (0.5–0.8)">🟡 0</span>
+          <span class="converter-stat-badge badge-conf-red" id="stat-low-conf" title="Требует проверки (< 0.5)">🔴 0</span>
         </div>
       </div>
 
-      <div style="margin-top: 1rem; display: flex; gap: 0.75rem;">
-        <button class="btn btn-primary" id="btn-process-docx-bundle">⚡ Запустить распознавание и сопоставление</button>
-        <button class="btn btn-success" id="btn-apply-docx-to-catalog" disabled>📥 Загрузить результат в Реестр песен</button>
+      <!-- Источники ввода: DOCX, songs.csv, OpenSong файлы и Копипаст -->
+      <div style="display: grid; grid-template-columns: 1.2fr 1.2fr 1.2fr 1fr; gap: 0.8rem; margin-bottom: 1rem;">
+        <div class="dropzone" id="docx-dropzone" style="padding: 1rem; min-height: 110px;">
+          <input type="file" id="input-docx-chords" accept=".docx" multiple style="display: none;">
+          <div style="font-size: 1.6rem; margin-bottom: 0.2rem;">📄</div>
+          <strong style="font-size: 0.88rem;">1. Загрузить DOCX файл(ы)</strong>
+          <p style="color: var(--muted); font-size: 0.75rem; margin-top: 0.2rem;">Автораспознавание сеток аккордов и оглавления</p>
+          <span id="docx-file-name" style="color: var(--info); font-size: 0.8rem; font-weight: bold; margin-top: 0.2rem; display: block;">Файл не выбран</span>
+        </div>
+
+        <div class="dropzone" id="songs-csv-dropzone" style="padding: 1rem; min-height: 110px; border-color: #10b981; background: #ecfdf5; cursor: pointer;">
+          <input type="file" id="input-admin-songs-csv" accept=".csv,text/csv" style="display: none;">
+          <div style="font-size: 1.6rem; margin-bottom: 0.2rem;">📊</div>
+          <strong style="font-size: 0.88rem; color: #047857;">2. Загрузить songs.csv</strong>
+          <p style="color: var(--muted); font-size: 0.75rem; margin-top: 0.2rem;">Импортировать актуальный файл базы (22 поля)</p>
+          <span id="csv-import-status" style="color: #047857; font-size: 0.8rem; font-weight: bold; margin-top: 0.2rem; display: block;">Нажмите для выбора CSV</span>
+        </div>
+
+        <div class="dropzone" id="opensong-dropzone" style="padding: 1rem; min-height: 110px; border-color: #0284c7; background: #f0f9ff;">
+          <input type="file" id="input-opensong-files" accept=".xml,.opensong,text/xml" multiple style="display: none;">
+          <input type="file" id="input-opensong-folder" webkitdirectory directory multiple style="display: none;">
+          <div style="font-size: 1.6rem; margin-bottom: 0.2rem;">🎼</div>
+          <strong style="font-size: 0.88rem; color: #0369a1;">2. Импорт OpenSong XML</strong>
+          <p style="color: var(--muted); font-size: 0.75rem; margin-top: 0.2rem;">Загрузить файл(ы) или указать локальную папку</p>
+          <div style="display: flex; gap: 0.4rem; justify-content: center; margin-top: 0.4rem;">
+            <button type="button" class="btn btn-sm btn-outline" id="btn-pick-opensong-files" style="padding: 0.2rem 0.5rem; font-size: 0.75rem;">Файлы .xml</button>
+            <button type="button" class="btn btn-sm btn-outline" id="btn-pick-opensong-folder" style="padding: 0.2rem 0.5rem; font-size: 0.75rem;">📁 Папка opensong</button>
+          </div>
+          <span id="opensong-status-badge" style="color: #0369a1; font-size: 0.78rem; font-weight: bold; margin-top: 0.2rem; display: block;">Загружено файлов: 0</span>
+        </div>
+
+        <div style="border: 1px dashed var(--border); border-radius: 6px; padding: 0.75rem; background: #fafafa; display: flex; flex-direction: column;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.3rem;">
+            <strong style="font-size: 0.82rem;">3. Текст / Буфер:</strong>
+            <button type="button" class="btn btn-sm btn-outline" id="btn-parse-pasted-text" style="padding: 0.2rem 0.5rem; font-size: 0.75rem;">Распознать</button>
+          </div>
+          <textarea id="paste-text-input" placeholder="Вставьте песню (аккорды над текстом или [Am])..." style="flex: 1; min-height: 55px; font-family: monospace; font-size: 0.75rem; padding: 0.3rem; border: 1px solid var(--border); border-radius: 4px; resize: none;"></textarea>
+        </div>
       </div>
 
-      <div class="log-area" id="docx-process-log" style="margin-top: 1rem;">[Ожидание файлов сборника и порядка выхода...]</div>
+      <!-- Панель управления и экспорта -->
+      <div class="converter-toolbar">
+        <button type="button" class="btn" id="btn-parse-docx-chords" disabled>⚡ 1. Запустить точный DP-парсинг</button>
+        <button type="button" class="btn btn-outline" id="btn-realign-current-song" title="Автоматически пересчитать привязку аккордов для текущей песни">⟲ Автовыравнивание</button>
+        
+        <!-- Undo / Redo controls (до 50 операций) -->
+        <div style="height: 24px; width: 1px; background: #cbd5e1; margin: 0 0.3rem;"></div>
+        <button type="button" class="btn btn-outline" id="btn-editor-undo" title="Отменить последнее действие (Ctrl+Z)" disabled>↶ Отмена (Undo)</button>
+        <button type="button" class="btn btn-outline" id="btn-editor-redo" title="Повторить отменённое действие (Ctrl+Y)" disabled>↷ Повтор (Redo)</button>
+        <span id="history-steps-badge" style="font-size:0.75rem; color:var(--muted); font-weight:600;">0/50</span>
+
+        <div style="height: 24px; width: 1px; background: #cbd5e1; margin: 0 0.3rem;"></div>
+        
+        <!-- Отдельная кнопка для редактирования всех тэгов и 22 полей текущей песни -->
+        <button type="button" class="btn btn-outline" id="btn-editor-edit-tags" style="border-color: #0284c7; color: #0369a1; font-weight: 700;" title="Открыть окно редактирования тэгов, темы, размера и заметок">🏷️ Тэги и поля (22 поля)</button>
+
+        <button class="btn btn-success" id="btn-apply-docx-songs" disabled>📥 Сохранить в базу (songs.csv)</button>
+        
+        <!-- Выгрузки -->
+        <button class="btn btn-outline" id="btn-export-opensong-xml">XML OpenSong</button>
+        <button class="btn btn-outline" id="btn-export-chordpro-txt">ChordPro (.cho)</button>
+        <button class="btn btn-outline" id="btn-print-html-pdf">🖨️ Печать / PDF</button>
+        <button class="btn btn-outline" id="btn-export-song-docx">📄 Экспорт DOCX</button>
+        <button class="btn btn-outline" id="btn-export-all-zip" title="Скачать все распознанные песни в одном ZIP-архиве">📦 Скачать ZIP всех песен</button>
+      </div>
+
+      <!-- Список извлеченных песен из сборника (для быстрого переключения) -->
+      <div id="docx-parsed-songs-container" style="display: none; margin-bottom: 1rem;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem;">
+          <strong style="font-size: 0.88rem;">Распознанные песни сборника (<span id="parsed-songs-count">0</span>):</strong>
+          <span style="font-size: 0.8rem; color: var(--muted);">Кликните на песню для перехода в визуальный редактор</span>
+        </div>
+        <div class="song-list-scroll" id="parsed-songs-list"></div>
+      </div>
+    </div>
+
+    <!-- ВИЗУАЛЬНЫЙ РЕДАКТОР И LIVE-ПРЕДПРОСМОТР -->
+    <div class="editor-layout">
+      <!-- Левая колонка: DOM Редактор со снапами -->
+      <div class="card" style="margin-bottom: 0;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.6rem;">
+          <h3>🎨 Интерактивный редактор аккордов</h3>
+          <div style="font-size: 0.78rem; color: var(--muted);">
+            💡 Двигайте аккорды мышью над слогами • Клик по аккорду для правки
+          </div>
+        </div>
+
+        <div class="chord-editor-container" id="interactive-editor">
+          <div style="text-align: center; color: var(--muted); padding: 3rem 1rem;">
+            Загрузите .docx сборник или вставьте текст песни, чтобы открыть интерактивный редактор с магнитными слогами.
+          </div>
+        </div>
+      </div>
+
+      <!-- Правая колонка: Live Preview и Журнал -->
+      <div class="card" style="margin-bottom: 0;">
+        <div class="preview-tabs" id="main-preview-tabs-bar">
+          <button type="button" class="preview-tab-btn active" data-ptab="ptab-preview-opensong">OpenSong XML</button>
+          <button type="button" class="preview-tab-btn" data-ptab="ptab-preview-chordpro">ChordPro</button>
+          <button type="button" class="preview-tab-btn" data-ptab="ptab-preview-plain">Чистый текст</button>
+          <button type="button" class="preview-tab-btn" data-ptab="ptab-preview-log">Журнал парсинга</button>
+        </div>
+
+        <div id="ptab-preview-opensong" class="ptab-content">
+          <div style="font-size:0.75rem; color:var(--muted); margin-bottom:0.3rem;">✏️ Редактируйте прямо здесь: перемещайте аккорды пробелами в строках с точкой (.) — левое окно обновится на лету!</div>
+          <textarea class="live-code-view" id="live-opensong-view" spellcheck="false" style="width: 100%; min-height: 480px; resize: vertical; box-sizing: border-box; font-family: monospace; line-height: 1.35; padding: 0.75rem; border: 1px solid var(--border); border-radius: 6px; background: #0f172a; color: #f8fafc; font-size: 0.85rem;">// Здесь генерируется OpenSong в реальном времени...</textarea>
+        </div>
+        <div id="ptab-preview-chordpro" class="ptab-content" style="display: none;">
+          <div style="font-size:0.75rem; color:var(--muted); margin-bottom:0.3rem;">✏️ Формат ChordPro: двигайте [Аккорды] в тексте — обе панели синхронизируются автоматически!</div>
+          <textarea class="live-code-view" id="live-chordpro-view" spellcheck="false" style="width: 100%; min-height: 480px; resize: vertical; box-sizing: border-box; font-family: monospace; line-height: 1.35; padding: 0.75rem; border: 1px solid var(--border); border-radius: 6px; background: #0f172a; color: #f8fafc; font-size: 0.85rem;">// Здесь генерируется ChordPro в реальном времени...</textarea>
+        </div>
+        <div id="ptab-preview-plain" class="ptab-content" style="display: none;">
+          <textarea class="live-code-view" id="live-plain-view" spellcheck="false" style="width: 100%; min-height: 480px; resize: vertical; box-sizing: border-box; font-family: monospace; line-height: 1.35; padding: 0.75rem; border: 1px solid var(--border); border-radius: 6px; background: #0f172a; color: #f8fafc; font-size: 0.85rem;">// Чистый текст без аккордов...</textarea>
+        </div>
+        <div id="ptab-preview-log" class="ptab-content" style="display: none;">
+          <div class="live-code-view" id="docx-log" style="color: #38bdf8; min-height: 480px; max-height: 520px; overflow-y: auto;">[Ожидание выбора файла DOCX или вставки песни...]</div>
+        </div>
+      </div>
     </div>
   </section>
+
+  <!-- TAB 2: DOCX ID ORDER IMPORT -->
+  <section id="tab-docx-ids" class="tab-pane" style="display: none;">
+    <div class="card">
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.8rem;">
+        <div>
+          <h2><span class="step-number">2</span> Загрузка порядка выхода и установка 4-значных ID (.docx / .txt)</h2>
+          <p style="color: var(--muted); font-size: 0.88rem; margin-top: 0.3rem;">
+            Устанавливает строгие канонические номера выхода песен (в формате <code>0001</code> ... <code>0687</code>). В каждой строке: <code>Номер. Название песни</code>.
+          </p>
+        </div>
+        <span class="badge">Канонический реестр номеров выхода</span>
+      </div>
+
+      <div class="dropzone" id="docx-id-dropzone">
+        <input type="file" id="input-docx-ids" accept=".docx,.txt,.csv" style="display: none;">
+        <div style="font-size: 2rem; margin-bottom: 0.5rem;">🔢</div>
+        <strong>Нажмите или перетащите файл с порядком выхода песен (.docx, .txt или .csv)</strong>
+        <p style="color: var(--muted); font-size: 0.82rem; margin-top: 0.3rem;">Каждая строка содержит номер и название песни (например: <code>482. Белый снег</code> или <code>0482 Белый снег</code>)</p>
+      </div>
+
+      <div style="display: flex; gap: 0.5rem; margin-top: 1rem; align-items: center; flex-wrap: wrap;">
+        <button class="btn" id="btn-parse-docx-ids" disabled>⚡ Прочитать порядок выхода</button>
+        <button class="btn btn-success" id="btn-apply-docx-ids" disabled>🎯 Сопоставить и применить 4-значные ID к песням</button>
+        <span id="docx-id-file-name" style="color: var(--muted); font-size: 0.88rem; margin-left: 0.5rem;">Файл не выбран</span>
+      </div>
+    </div>
+
+    <div class="grid-2">
+      <div class="card">
+        <h3>Журнал сопоставления ID</h3>
+        <div class="log-area" id="docx-id-log">[Ожидание файла со списком номеров выхода...]</div>
+      </div>
+      <div class="card">
+        <h3>Таблица найденных соответствий</h3>
+        <div style="max-height: 260px; overflow-y: auto;">
+          <table id="table-id-matches">
+            <thead>
+              <tr>
+                <th>Номер</th>
+                <th>Название из файла</th>
+                <th>Статус в базе</th>
+              </tr>
+            </thead>
+            <tbody id="tbody-id-matches">
+              <tr><td colspan="3" style="text-align: center; color: var(--muted);">Нет данных</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- TAB 3: CATALOG -->
+  
 
   <!-- ========================================================= -->
   <!-- TAB 6: ПРЕОБРАЗОВАНИЕ АУДИО В ПАПКЕ                        -->
@@ -2089,345 +2255,2412 @@ document.getElementById('btn-save-playlists-csv')?.addEventListener('click', () 
 // 5. ИМПОРТ DOCX И ПОРЯДКА
 // ==========================================
 
-// =========================================================================
-// ВСТРОЕННЫЙ МОДУЛЬ ИМПОРТА DOCX (СБОРНИК ПЕСЕН + ПОРЯДОК ВЫХОДА)
-// =========================================================================
-let parsedDocxSongs = [];
-let parsedDocxOrderList = [];
-
-// Нормализация названий для сопоставления
-function normalizeDocxTitle(str) {
-  if (!str) return '';
-  return str.toLowerCase()
-    .replace(/[«»""''„“]/g, '')
-    .replace(/[.,!?:;\-–—_()[\]{}]/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
-function cleanDocxTitle(rawTitle) {
-  if (!rawTitle) return 'Без названия';
-  let t = rawTitle.trim();
-  // Если строка начинается с аккордов (например "Am   Dm   E"), не берем ее как название
-  if (/^[A-H][b#]?(?:m|maj|min|dim|aug|sus)?\d*(?:\s+[A-H][b#]?(?:m|maj|min|dim|aug|sus)?\d*)+$/.test(t)) {
-    return 'Без названия';
-  }
-  t = t.replace(/^#?\s*\d+[.\s]+/, '');
-  // Срезаем транспозицию в скобках (+1), (+2), (+0), (-1) и т.д.
-  t = t.replace(/\s*\([+-]?\d+\)\s*$/i, '');
-  // Срезаем ссылки на тональность или комментарии в скобках
-  t = t.replace(/\s*\([A-ZА-ЯЁ0-9#b\/\s,.-]+\)$/i, '');
-  t = t.replace(/\s*\[.*?\]/g, '');
-  t = t.replace(/[«»"']/g, '');
-  return t.trim() || 'Без названия';
-}
-
-function findMatchingCatalogSong(queryTitle, catalog, songLyrics = '') {
-  if (!queryTitle) return null;
-  const cleanQ = cleanDocxTitle(queryTitle);
-  const nq = normalizeDocxTitle(cleanQ);
-  if (!nq || nq === 'без названия') return null;
-
-  // 1. Точное совпадение
-  let match = catalog.find(s => normalizeDocxTitle(cleanDocxTitle(s.title)) === nq);
-  if (match) return { song: match, score: 100, reason: 'Точное' };
-
-  // 2. Без псалмов (Пс. 82) и ссылок
-  const qNoPs = nq.replace(/\b(?:пс|1кор|2кор|рим|евр|ис|наум)\s*\d+(?:[,.:]\d+)*\b/gi, '').replace(/\s+/g, ' ').trim();
-  if (qNoPs.length >= 3) {
-    match = catalog.find(s => {
-      const tNorm = normalizeDocxTitle(cleanDocxTitle(s.title));
-      const tNoPs = tNorm.replace(/\b(?:пс|1кор|2кор|рим|евр|ис|наум)\s*\d+(?:[,.:]\d+)*\b/gi, '').replace(/\s+/g, ' ').trim();
-      return tNoPs === qNoPs || (tNoPs.length > 5 && (tNoPs.startsWith(qNoPs) || qNoPs.startsWith(tNoPs)));
-    });
-    if (match) return { song: match, score: 85, reason: 'По началу / Псалму' };
-  }
-
-  // 3. Совпадение по отдельным словам (Jaccard similarity)
-  const qWords = qNoPs.split(' ').filter(w => w.length > 2);
-  if (qWords.length > 0) {
-    let best = null;
-    let maxOverlap = 0;
-    for (const s of catalog) {
-      const tNorm = normalizeDocxTitle(cleanDocxTitle(s.title));
-      const tWords = tNorm.split(' ').filter(w => w.length > 2);
-      const overlap = qWords.filter(w => tWords.includes(w)).length;
-      if (overlap > maxOverlap && overlap >= Math.min(2, qWords.length)) {
-        maxOverlap = overlap;
-        best = s;
-      }
-    }
-    if (best && maxOverlap >= 2) return { song: best, score: 65, reason: 'По словам' };
-  }
-
-  // 4. Поиск названия в первой строчке текста (если кусок куплета взят как название)
-  if (songLyrics && songLyrics.length > 10) {
-    const firstLines = songLyrics.toLowerCase().substring(0, 150);
-    const textMatch = catalog.find(s => {
-      const tNorm = normalizeDocxTitle(s.title);
-      return tNorm.length > 4 && firstLines.includes(tNorm);
-    });
-    if (textMatch) return { song: textMatch, score: 60, reason: 'По тексту песни' };
-  }
-
-  return null;
-}
-
-async function extractParagraphsFromDocxFile(file) {
-  const arrayBuffer = await file.arrayBuffer();
-  const zip = await JSZip.loadAsync(arrayBuffer);
-  const docXmlFile = zip.file("word/document.xml");
-  if (!docXmlFile) throw new Error("Файл word/document.xml не найден в архиве DOCX");
-  const docXmlText = await docXmlFile.async("text");
-
-  const parser = new DOMParser();
-  const xmlDoc = parser.parseFromString(docXmlText, "text/xml");
-  const paragraphs = xmlDoc.getElementsByTagNameNS("*", "p");
-
-  let songBlocks = [];
-  let currentSongLines = [];
-  let allParagraphs = [];
-
-  for (let p of paragraphs) {
-    let pPr = p.getElementsByTagNameNS("*", "pPr")[0];
-    let isHeading1 = false;
-    let isNumbered = false;
-
-    if (pPr) {
-      let pStyle = pPr.getElementsByTagNameNS("*", "pStyle")[0];
-      if (pStyle) {
-        let styleVal = pStyle.getAttribute("w:val") || "";
-        if (/Heading1|Heading 1|Заголовок1|Заголовок 1/i.test(styleVal)) isHeading1 = true;
-      }
-      if (pPr.getElementsByTagNameNS("*", "numPr").length > 0) isNumbered = true;
+function extractCapo(title) {
+      const capoMatch = title.match(/\(([+-]\d+)\)\s*$/) || title.match(/\^\+?(\d+)\^/);
+      if (capoMatch) return '+' + capoMatch[1].replace('+', '');
+      return '+3';
     }
 
-    let tElements = p.getElementsByTagNameNS("*", "t");
-    let pText = "";
-    for (let t of tElements) { pText += t.textContent; }
-    allParagraphs.push(pText);
+    function cleanSongTitle(title) {
+      if (!title) return 'Без названия';
+      return title
+        .replace(/\[.*?\](?:\(.*?\))?/g, '') // remove markdown links [link](#id)
+        .replace(/\^.*?\^/g, '')               // remove ^+1^
+        .replace(/\([+-]?\d+\)/g, '')         // remove (+1), (-2)
+        .replace(/\(\?\)/g, '')               // remove (?)
+        .replace(/^\d+[.\s]+/, '')             // remove leading number like 15.
+        .replace(/\s+/g, ' ')
+        .trim();
+    }
 
-    if (isHeading1 && /^\d+/.test(pText.trim())) isNumbered = true;
-    if (/^#\s/.test(pText.trim())) { isHeading1 = true; isNumbered = true; }
+    function normalizeSongTitle(title) {
+      if (!title) return '';
+      return cleanSongTitle(title)
+        .toLowerCase()
+        .replace(/ё/g, 'е')
+        .replace(/[^a-zа-я0-9\s]/g, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+    }
 
-    if ((isHeading1 && isNumbered) || /^#?\s*\d+\.\s+[A-ZА-ЯЁ]/.test(pText.trim())) {
+    // Интеллектуальное нечеткое сопоставление (учитывает псалмы, префиксы, цитаты)
+    function findBestMatchingSong(queryTitle, catalog) {
+      if (!queryTitle) return null;
+      const nq = normalizeSongTitle(queryTitle);
+      if (!nq) return null;
+
+      // 1. Точное совпадение
+      let match = catalog.find(s => normalizeSongTitle(s.title) === nq);
+      if (match) return { song: match, score: 100, reason: 'Точное' };
+
+      // 2. Сопоставление с игнорированием ссылок на Псалмы (напр. "В псалме (ПС.82)" -> "В псалме воскликнет")
+      const qNoPs = nq.replace(/\bпс\s*\d+\b/g, '').replace(/\s+/g, ' ').trim();
+      if (qNoPs.length >= 4) {
+        match = catalog.find(s => {
+          const tNorm = normalizeSongTitle(s.title);
+          const tNoPs = tNorm.replace(/\bпс\s*\d+\b/g, '').replace(/\s+/g, ' ').trim();
+          return tNoPs === qNoPs || tNoPs.startsWith(qNoPs) || qNoPs.startsWith(tNoPs);
+        });
+        if (match) return { song: match, score: 85, reason: 'По началу / Псалму' };
+      }
+
+      // 3. Совпадение по ключевым словам (Jaccard token similarity)
+      const qWords = qNoPs.split(' ').filter(w => w.length > 2);
+      if (qWords.length > 0) {
+        let bestCandidate = null;
+        let maxOverlap = 0;
+
+        for (const s of catalog) {
+          const tNorm = normalizeSongTitle(s.title).replace(/\bпс\s*\d+\b/g, '').replace(/\s+/g, ' ').trim();
+          const tWords = tNorm.split(' ').filter(w => w.length > 2);
+          if (tWords.length === 0) continue;
+
+          const common = qWords.filter(w => tWords.includes(w));
+          const overlapRatio = common.length / Math.min(qWords.length, tWords.length);
+          if (overlapRatio >= 0.6 && common.length > maxOverlap) {
+            maxOverlap = common.length;
+            bestCandidate = s;
+          }
+        }
+
+        if (bestCandidate) {
+          return { song: bestCandidate, score: 70, reason: 'По словам' };
+        }
+      }
+
+      return null;
+    }
+
+    function detectSection(line, currentSection) {
+      const trimmedUpper = line.replace(/[\u00a0\u200b\t]+/g, ' ').trim().toUpperCase();
+      if (/^\[V\d+\]/.test(trimmedUpper) || /^(\d+)\./.test(trimmedUpper)) return 'Куплет';
+      if (/^\[C\]/.test(trimmedUpper) || /^ПР\./.test(trimmedUpper)) return 'Припев';
+      if (/^\[B\]/.test(trimmedUpper) || /^БР\./.test(trimmedUpper)) return 'Бридж';
+      return currentSection;
+    }
+
+    // Convert raw extracted block into song object (OpenSong + ChordPro + summary notes)
+    
+    // =========================================================================
+    // ADVANCED GEOMETRIC TYPOGRAPHY & CHORD-ALIGNMENT ENGINE (TypeScript-grade)
+    // =========================================================================
+    
+    // Regular expression for chords (Latin A-G + European H/B notation + extensions)
+    const CHORD_MATCH_REGEX = /^[A-H](#|b)?(m|maj|min|dim|aug|sus|add)?\d{0,2}(sus\d|add\d{1,2})?(\/[A-H](#|b)?)?$/;
+    
+    // Russian and English vowels for syllable snapping heuristics
+    const VOWELS_REGEX = /[аеёиоуыэюяaeiouyАЕЁИОУЫЭЮЯAEIOUY]/;
+    
+    // Canvas text metrics cache for Times New Roman font
+    const _metricsCanvas = typeof document !== 'undefined' ? document.createElement('canvas') : null;
+    const _metricsCtx = _metricsCanvas ? _metricsCanvas.getContext('2d') : null;
+
+    function measureTextWidth(text, font = '16px "Times New Roman", serif') {
+      if (!_metricsCtx) return text.length * 8; // fallback
+      _metricsCtx.font = font;
+      return _metricsCtx.measureText(text).width;
+    }
+
+    /**
+     * Measure cumulative X positions of every character (grapheme) in a line of lyrics
+     */
+    function computeCharXPositions(text, font = '16px "Times New Roman", serif') {
+      const positions = [];
+      const chars = Array.from(text);
+      let runningPrefix = '';
+      for (let i = 0; i < chars.length; i++) {
+        const x = measureTextWidth(runningPrefix, font);
+        positions.push(x);
+        runningPrefix += chars[i];
+      }
+      // Ending anchor point
+      positions.push(measureTextWidth(runningPrefix, font));
+      return positions;
+    }
+
+    /**
+     * Build magnetic snap points along the lyric line with phonetic cost penalties
+     */
+    function buildLyricSnapPoints(text, xs, emSize = 16) {
+      const snaps = [];
+      const chars = Array.from(text);
+      let inWord = false;
+
+      for (let i = 0; i < chars.length; i++) {
+        const ch = chars[i];
+        const isSpace = /\s/.test(ch);
+        const isWordStart = !isSpace && !inWord;
+        inWord = !isSpace;
+
+        let penalty = 1.2 * emSize; // Default consonant / symbol penalty
+        if (isWordStart) {
+          penalty = 0; // Word start anchor: zero penalty (primary anchor)
+        } else if (VOWELS_REGEX.test(ch)) {
+          penalty = 0.35 * emSize; // Syllable vowel anchor: low penalty
+        } else if (isSpace) {
+          penalty = 1.6 * emSize; // Spaces are discouraged as chord targets
+        }
+
+        snaps.push({
+          charIndex: i,
+          x: xs[i],
+          penalty: penalty,
+          char: ch
+        });
+      }
+
+      // End of line anchor (for instrumental or outro chords)
+      snaps.push({
+        charIndex: chars.length,
+        x: xs[chars.length] || (chars.length * emSize * 0.5),
+        penalty: 0.8 * emSize,
+        char: ''
+      });
+
+      return snaps;
+    }
+
+    /**
+     * Monotonic Dynamic Programming alignment of chords to lyric snap points.
+     * Guaranteed: chords are preserved in left-to-right order without collision on same char.
+     */
+    /**
+     * Enhanced Geometric DP Alignment with Dynamic Proportional Scale Compensation:
+     * When spaces accumulate towards the end of a line, cumulative kerning drift increases.
+     * We dynamically calibrate the space compression ratio (effectiveSpaceWidth / regularCharWidth)
+     * so that end-of-line chords snap accurately to their intended lyric syllables.
+     */
+    function alignChordsDP(chordTokens, snaps, emSize = 16, lineLyric = '', rawChordLine = '') {
+      const M = chordTokens.length;
+      const N = snaps.length;
+      if (M === 0) return [];
+      if (N === 0) return chordTokens.map((_, i) => i);
+
+      // Analyze end-of-line drift if both lines exist
+      let spaceScaleFactor = 1.0;
+      if (rawChordLine && lineLyric) {
+        const chordLineLen = rawChordLine.length;
+        const lyricLen = lineLyric.length;
+        if (chordLineLen > 0 && lyricLen > 0 && chordTokens[M - 1].rawCol > 20) {
+          // If the chord line uses wide monospace-like spacing for proportional text
+          const lyricEndPx = snaps[N - 1].x;
+          const lastChordEstPx = chordTokens[M - 1].x;
+          if (lastChordEstPx > lyricEndPx * 1.05 && lyricEndPx > 0) {
+            spaceScaleFactor = lyricEndPx / lastChordEstPx;
+          }
+        }
+      }
+
+      // Cost function with quadratic distance penalty to prevent drift hopping
+      function calcCost(k, i) {
+        const chordX = chordTokens[k].x * spaceScaleFactor;
+        const snap = snaps[i];
+        const dist = Math.abs(chordX - snap.x);
+        // Normalized distance with quadratic damping
+        const normDist = dist / emSize;
+        return (normDist + 0.3 * (normDist * normDist)) + (snap.penalty / emSize);
+      }
+
+      // dp[k][i]: minimum cost to place chord k at snap point i
+      const dp = Array.from({ length: M }, () => new Float64Array(N).fill(Infinity));
+      const parent = Array.from({ length: M }, () => new Int32Array(N).fill(-1));
+
+      // Base case: chord 0
+      for (let i = 0; i < N; i++) {
+        dp[0][i] = calcCost(0, i);
+      }
+
+      // Recurrence for chords 1..M-1
+      for (let k = 1; k < M; k++) {
+        let minPrevCost = Infinity;
+        let bestPrevIndex = -1;
+
+        for (let i = k; i < N; i++) {
+          const prevJ = i - 1;
+          if (dp[k - 1][prevJ] < minPrevCost) {
+            minPrevCost = dp[k - 1][prevJ];
+            bestPrevIndex = prevJ;
+          }
+
+          if (bestPrevIndex !== -1 && minPrevCost !== Infinity) {
+            dp[k][i] = calcCost(k, i) + minPrevCost;
+            parent[k][i] = bestPrevIndex;
+          }
+        }
+      }
+
+      // Find best finish
+      let bestEndCost = Infinity;
+      let bestEndIndex = -1;
+      for (let i = M - 1; i < N; i++) {
+        if (dp[M - 1][i] < bestEndCost) {
+          bestEndCost = dp[M - 1][i];
+          bestEndIndex = i;
+        }
+      }
+
+      // Backtrack
+      const resultSnapIndices = new Array(M);
+      let curr = bestEndIndex >= 0 ? bestEndIndex : N - 1;
+      for (let k = M - 1; k >= 0; k--) {
+        resultSnapIndices[k] = curr;
+        curr = parent[k][curr];
+        if (curr === -1 && k > 0) curr = Math.max(0, resultSnapIndices[k] - 1);
+      }
+
+      return resultSnapIndices.map(snapIdx => snaps[snapIdx].charIndex);
+    }
+
+    /**
+     * Compute confidence score (0.0 to 1.0) based on physical proximity
+     */
+    function computeChordConfidence(chordX, targetX, emSize = 16) {
+      const dist = Math.abs(chordX - targetX);
+      const conf = 1.0 - (dist / (2.5 * emSize));
+      return Math.max(0.1, Math.min(1.0, conf));
+    }
+
+    // =========================================================================
+    // CANONICAL SONG MODEL SERIALIZERS (OpenSong XML, ChordPro, Plain Text)
+    // =========================================================================
+
+    function serializeSongToChordPro(song) {
+      const lines = [];
+      if (song.title) lines.push(`{title: ${song.title}}`);
+      if (song.key_default) lines.push(`{key: ${song.key_default}}`);
+      if (song.capo) lines.push(`{capo: ${song.capo}}`);
+      if (song.tempo) lines.push(`{tempo: ${song.tempo}}`);
+      lines.push('');
+
+      for (const line of song.lines) {
+        if (!line.lyric && (!line.chords || line.chords.length === 0)) {
+          lines.push('');
+          continue;
+        }
+
+        if (!line.chords || line.chords.length === 0) {
+          lines.push(line.lyric);
+          continue;
+        }
+
+        // Sort chords descending by charIndex so insertion does not disrupt prior indices
+        const sortedChords = [...line.chords].sort((a, b) => b.charIndex - a.charIndex);
+        let result = line.lyric;
+        for (const c of sortedChords) {
+          const chordText = c.name || c.chord || '';
+          if (!chordText) continue;
+          const idx = Math.min(Math.max(0, c.charIndex), result.length);
+          result = result.slice(0, idx) + `[${chordText}]` + result.slice(idx);
+        }
+        lines.push(result);
+      }
+      return lines.join('\n');
+    }
+
+    
+    
+    
+    function checkSectionPrefix(line) {
+      if (!line) return null;
+      const norm = line.replace(/[\u00a0\u200b\t]+/g, ' ').trim();
+      const mVerse = norm.match(/^(\d+)\.\s*(.*)$/);
+      const mChorus = norm.match(/^ПР\.\s*(.*)$/i);
+      const mBridge = norm.match(/^БР\.\s*(.*)$/i);
+      const mExplicitTag = norm.match(/^\[(V\d+|C\d*|B\d*|T|E|Intro|Outro)\]\s*(.*)$/i);
+
+      if (mVerse) {
+        const num = mVerse[1];
+        return { tag: 'V' + num, kind: 'verse-' + num, header: '[V' + num + ']', rest: mVerse[2] };
+      }
+      if (mChorus) {
+        return { tag: 'C', kind: 'chorus', header: '[C]', rest: mChorus[1] };
+      }
+      if (mBridge) {
+        return { tag: 'B', kind: 'bridge', header: '[B]', rest: mBridge[1] };
+      }
+      if (mExplicitTag) {
+        const tag = mExplicitTag[1].toUpperCase();
+        const kind = tag.startsWith('C') ? 'chorus' : (tag.startsWith('B') ? 'bridge' : 'verse');
+        return { tag: tag, kind: kind, header: '[' + tag + ']', rest: mExplicitTag[2] };
+      }
+      return null;
+    }
+
+    function realignSongModel(songModel) {
+      if (!songModel || !songModel.lines) return;
+      songModel.lines.forEach(line => {
+        if (line.lyric && line.chords && line.chords.length > 0) {
+          const xs = computeCharXPositions(line.lyric);
+          const snaps = buildLyricSnapPoints(line.lyric, xs);
+          const chordTokens = line.chords.map(c => ({
+            text: c.name || c.chord || '',
+            x: xs[c.charIndex] || measureTextWidth(line.lyric.substring(0, c.charIndex)),
+            rawCol: c.charIndex
+          }));
+          const newIndices = alignChordsDP(chordTokens, snaps);
+          line.chords.forEach((c, idx) => {
+            if (newIndices[idx] !== undefined) {
+              c.charIndex = newIndices[idx];
+              const targetX = xs[c.charIndex] || c.charIndex * 8;
+              c.confidence = computeChordConfidence(chordTokens[idx].x, targetX);
+            }
+          });
+        }
+      });
+    }
+
+    function computeDefaultPresentation(song) {
+      if (!song || !song.lines) return '';
+      const order = [];
+      let currentSection = '';
+
+      for (const line of song.lines) {
+        let secKey = '';
+        if (line.kind === 'section-header' || line.kind === 'chorus-header' || (line.kind && line.kind.startsWith('['))) {
+          const match = (line.lyric || line.kind).match(/\[(.*?)\]/);
+          secKey = match ? match[1].trim() : (line.lyric || line.kind).trim();
+        } else if (line.sectionKey) {
+          secKey = line.sectionKey;
+        }
+
+        if (secKey && secKey !== currentSection) {
+          currentSection = secKey;
+          order.push(secKey);
+        }
+      }
+
+      // If presentation is empty, but we have sections (e.g. V1, C, V2, B)
+      return order.join(' ');
+    }
+
+    function serializeSongToOpenSongLyrics(song) {
+      const outputLines = [];
+      let currentSection = '';
+
+      for (const line of song.lines) {
+        // Section headers: only output if line is explicitly a section header
+        if (line.kind === 'section-header' || line.kind === 'chorus-header' || (line.kind && line.kind.startsWith('['))) {
+          const secText = line.lyric && line.lyric.startsWith('[') ? line.lyric : `[${line.lyric || line.kind}]`;
+          if (secText !== currentSection) {
+            outputLines.push(secText);
+            currentSection = secText;
+          }
+          continue;
+        }
+
+        if (!line.lyric && (!line.chords || line.chords.length === 0)) {
+          outputLines.push('');
+          continue;
+        }
+
+        let lyricStr = line.lyric || '';
+        let sortedChords = line.chords && line.chords.length > 0
+          ? [...line.chords].sort((a, b) => a.charIndex - b.charIndex)
+          : [];
+
+        // If line has chords
+        if (sortedChords.length > 0) {
+          let chordLineStr = '.';
+          for (const c of sortedChords) {
+            // In OpenSong, dot '.' is column 0, character indices map to column index (charIndex + 1)
+            // Guarantee at least 1 whitespace between consecutive chords to prevent collision
+            const targetCol = Math.max(c.charIndex + 1, chordLineStr.length + (chordLineStr.length > 1 ? 1 : 0));
+            while (chordLineStr.length < targetCol) chordLineStr += ' ';
+            chordLineStr += (c.name || c.chord || '');
+          }
+
+          // Open Chords / OpenSong trailing overlap protection:
+          // If the chord line extends beyond the lyric line, pad the lyric line with trailing spaces
+          // (minus 1 for the leading space of the lyric line) so downstream parsers and page layout engines
+          // maintain exact horizontal rhythm and don't wrap prematurely.
+          const chordContentLen = chordLineStr.length - 1; // excluding leading dot
+          if (chordContentLen > lyricStr.length) {
+            lyricStr = lyricStr.padEnd(chordContentLen, ' ');
+          }
+
+          outputLines.push(chordLineStr);
+        }
+
+        // Lyric line prefixed with a single space in OpenSong format
+        outputLines.push(' ' + lyricStr);
+      }
+      return outputLines.join('\n');
+    }
+
+    function serializeSongToOpenSongXml(song) {
+      const escapeXml = (str) => String(str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+      const lyricsBody = serializeSongToOpenSongLyrics(song);
+
+      const presentationVal = song.presentation || computeDefaultPresentation(song) || '';
+      return `<?xml version="1.0" encoding="UTF-8"?>
+<song>
+  <title>${escapeXml(song.title)}</title>
+  <author>${escapeXml(song.author || 'Огненный ветер')}</author>
+  <copyright>${escapeXml(song.album || '')}</copyright>
+  <presentation>${escapeXml(presentationVal)}</presentation>
+  <key>${escapeXml(song.key_default || '')}</key>
+  <capo print="true">${escapeXml(song.capo || '')}</capo>
+  <tempo>${escapeXml(song.tempo || '')}</tempo>
+  <time_sig>${escapeXml(song.time_signature || '4/4')}</time_sig>
+  <lyrics>
+${lyricsBody}
+  </lyrics>
+</song>`;
+    }
+
+    function serializeSongToPlainText(song) {
+      return song.lines.map(l => l.lyric || '').join('\n');
+    }
+
+
+    function convertTextToOpenSongData(text) {
+      const lines = text.split(/\r?\n/);
+      if (!lines.length) return null;
+
+      let titleLine = "";
+      for (let l of lines) { if (l.trim()) { titleLine = l.trim(); break; } }
+      if (titleLine.startsWith('# ')) titleLine = titleLine.slice(2).trim();
+
+      const capoValue = extractCapo(titleLine);
+      let cleanTitle = cleanSongTitle(titleLine);
+
+      let meta = { key_line: '', theme: '', tempo: '', capo: capoValue };
+      const metaMatch = titleLine.match(/\((.*?)\)/);
+      if (metaMatch && (metaMatch[1].toLowerCase().includes('тон') || metaMatch[1].toLowerCase().includes('стиль') || metaMatch[1].toLowerCase().includes('capo'))) {
+        meta = parseMetadata(metaMatch[1]);
+        if (!meta.capo) meta.capo = capoValue;
+      }
+
+      let lyricsLines = [];
+      let plainLines = [];
+      let notesDict = {};
+      let currentSection = 'Куплет';
+      notesDict[currentSection] = [];
+
+      for (let i = 1; i < lines.length; i++) {
+        let line = lines[i];
+        if (!line.trim()) {
+          lyricsLines.push('');
+          plainLines.push('');
+          continue;
+        }
+
+        if (line.trim().startsWith('(') && (line.includes('Тон') || line.toLowerCase().includes('стиль') || line.toLowerCase().includes('capo') || line.toLowerCase().includes('темп'))) {
+          let parsed = parseMetadata(line);
+          if (parsed.key_line) meta.key_line = parsed.key_line;
+          if (parsed.theme) meta.theme = parsed.theme;
+          if (parsed.tempo) meta.tempo = parsed.tempo;
+          if (parsed.capo) meta.capo = parsed.capo;
+          continue;
+        }
+
+        let processedSublines = processMixedLine(line);
+        for (let pline of processedSublines) {
+          if (!pline) {
+            lyricsLines.push('');
+            plainLines.push('');
+            continue;
+          }
+
+          if (pline.startsWith('.')) {
+            lyricsLines.push(pline);
+            let chords = extractChords(pline.substring(1));
+            if (chords.length) {
+              if (!notesDict[currentSection]) notesDict[currentSection] = [];
+              notesDict[currentSection].push(chords);
+            }
+          } else {
+            currentSection = detectSection(pline, currentSection);
+            let lineMod = pline.replace(/\*\*(.*?)\*\*/g, '[$1]');
+            lineMod = lineMod.replace(/\((.*?)\)/g, (m, inner) => {
+              if (isChordLine(inner)) return `[${inner}]`;
+              return m;
+            });
+            lyricsLines.push(lineMod);
+            plainLines.push(lineMod.replace(/\[[^\]]+\]/g, ''));
+          }
+        }
+      }
+
+      // Format notes summary: К: | Am | | Dm E |
+      let notesParts = [];
+      for (let sec in notesDict) {
+        let linesOfChords = notesDict[sec];
+        if (!linesOfChords || !linesOfChords.length) continue;
+        let prefix = sec === "Припев" ? "П" : (sec === "Бридж" ? "Б" : "K");
+        let formattedBars = linesOfChords.map(cl => `| ${cl.join(' ')} |`);
+        let chunked = [];
+        for (let j = 0; j < formattedBars.length; j += 2) {
+          chunked.push(formattedBars.slice(j, j + 2).join(' '));
+        }
+        notesParts.push(`${prefix}: ${chunked[0]}`);
+        for (let c = 1; c < chunked.length; c++) { notesParts.push(`   ${chunked[c]}`); }
+        notesParts.push("");
+      }
+
+      // Generate canonical ChordPro for application
+      const chordProBody = convertOpenSongLinesToChordPro(lyricsLines);
+
+      return {
+        title: cleanTitle,
+        lyrics: lyricsLines.join('\n').trim(),
+        chordpro: chordProBody,
+        plainLyrics: plainLines.join('\n').trim(),
+        meta: meta,
+        capo: meta.capo || capoValue,
+        notes: notesParts.join('\n').trim()
+      };
+    }
+
+    function convertOpenSongLinesToChordPro(lines) {
+      const result = [];
+      for (let i = 0; i < lines.length; i++) {
+        const l = lines[i];
+        if (l.startsWith('.')) {
+          const chordLine = l.substring(1);
+          const nextL = lines[i + 1];
+          if (nextL !== undefined && !nextL.startsWith('.') && !nextL.startsWith('#') && !nextL.startsWith('[')) {
+            const chordMatches = [];
+            const regex = /\S+/g;
+            let m;
+            while ((m = regex.exec(chordLine)) !== null) {
+              chordMatches.push({ chord: m[0].replace(/\*\*/g, ''), col: m.index });
+            }
+            let merged = '';
+            let pos = 0;
+            chordMatches.forEach(cm => {
+              if (cm.col > pos) {
+                merged += nextL.slice(pos, cm.col);
+                pos = cm.col;
+              }
+              merged += '[' + cm.chord + ']';
+            });
+            merged += nextL.slice(pos);
+            result.push(merged);
+            i++;
+          } else {
+            const chs = chordLine.trim().split(/\s+/).map(c => '[' + c.replace(/\*\*/g, '') + ']').join(' ');
+            result.push(chs);
+          }
+        } else {
+          result.push(l);
+        }
+      }
+      return result.join('\n');
+    }
+
+    // Direct immersion of .docx document paragraphs
+    async function extractParagraphsFromDocx(file) {
+      const arrayBuffer = await file.arrayBuffer();
+      const zip = await JSZip.loadAsync(arrayBuffer);
+      const docXmlFile = zip.file("word/document.xml");
+      if (!docXmlFile) throw new Error("Файл word/document.xml не найден в архиве DOCX");
+      const docXmlText = await docXmlFile.async("text");
+      
+      const parser = new DOMParser();
+      const xmlDoc = parser.parseFromString(docXmlText, "text/xml");
+      const paragraphs = xmlDoc.getElementsByTagNameNS("*", "p");
+      
+      let songBlocks = [];
+      let currentSongLines = [];
+      let allParagraphs = [];
+      
+      for (let p of paragraphs) {
+        let pPr = p.getElementsByTagNameNS("*", "pPr")[0];
+        let isHeading1 = false;
+        let isNumbered = false;
+        
+        if (pPr) {
+          let pStyle = pPr.getElementsByTagNameNS("*", "pStyle")[0];
+          if (pStyle) {
+            let styleVal = pStyle.getAttribute("w:val") || "";
+            if (/Heading1|Heading 1|Заголовок1|Заголовок 1/i.test(styleVal)) isHeading1 = true;
+          }
+          if (pPr.getElementsByTagNameNS("*", "numPr").length > 0) isNumbered = true;
+        }
+        
+        let tElements = p.getElementsByTagNameNS("*", "t");
+        let pText = "";
+        for (let t of tElements) { pText += t.textContent; }
+        allParagraphs.push(pText);
+        
+        // Check if line indicates heading
+        if (isHeading1 && /^\d+/.test(pText.trim())) isNumbered = true;
+        if (/^#\s/.test(pText.trim())) { isHeading1 = true; isNumbered = true; }
+        
+        if (isHeading1 && isNumbered) {
+          if (currentSongLines.length) songBlocks.push(currentSongLines.join('\n'));
+          currentSongLines = [pText];
+        } else {
+          if (currentSongLines.length || pText.trim()) currentSongLines.push(pText);
+        }
+      }
       if (currentSongLines.length) songBlocks.push(currentSongLines.join('\n'));
-      currentSongLines = [pText];
-    } else {
-      if (currentSongLines.length || pText.trim()) currentSongLines.push(pText);
+
+      // If document was structured with TOC first
+      return { songBlocks, allParagraphs };
     }
-  }
-  if (currentSongLines.length) songBlocks.push(currentSongLines.join('\n'));
 
-  return { songBlocks, allParagraphs };
-}
+    // ==========================================
+    
+    // =========================================================================
+    // PARSED SONGS STORE & ACTIVE SONG STATE
+    // =========================================================================
+    let activeSongModel = null;
+    let currentSongIndex = 0;
 
-function parseDocxSongBlock(block, defaultId = '0001') {
-  const lines = block.split(/\r?\n/);
-  if (!lines.length) return null;
+    /**
+     * Convert raw text blocks into the rich canonical Song Model
+     */
+    function parseRawBlockToSongModel(textBlock, defaultId = '0001') {
+      const rawLines = textBlock.split(/\r?\n/);
+      if (!rawLines.length) return null;
 
-  let title = 'Без названия';
-  let headerEndIdx = 0;
+      let title = 'Без названия';
+      let key = '';
+      let capo = '';
+      let tempo = '';
+      let headerLinesCount = 0;
 
-  for (let i = 0; i < lines.length; i++) {
-    const l = lines[i].trim();
-    if (!l) continue;
-    // Пропускаем строки аккордов
-    if (/^[A-H][b#]?(?:m|maj|min|dim|aug|sus)?\d*(?:\s+[A-H][b#]?(?:m|maj|min|dim|aug|sus)?\d*)+$/.test(l)) continue;
-
-    if (/^#?\s*\d*\.?\s*[A-ZА-ЯЁ]/.test(l)) {
-      title = cleanDocxTitle(l);
-      headerEndIdx = i + 1;
-      break;
-    }
-  }
-
-  const bodyLines = lines.slice(headerEndIdx);
-  const plainText = bodyLines.join('\n');
-
-  return {
-    id: defaultId,
-    number: parseInt(defaultId, 10) || 1,
-    title: title,
-    author: 'Огненный ветер',
-    theme: 'Сборник DOCX',
-    alttheme: '',
-    lyrics: plainText,
-    chordpro: plainText,
-    notes: '',
-    key: '',
-    capo: '',
-    time_signature: '4/4'
-  };
-}
-
-// ОБРАБОТЧИКИ СОБЫТИЙ ВКЛАДКИ DOCX
-document.getElementById('btn-process-docx-bundle')?.addEventListener('click', async () => {
-  const bookFile = document.getElementById('input-docx-book')?.files[0];
-  const orderFile = document.getElementById('input-docx-order')?.files[0];
-  const logEl = document.getElementById('docx-process-log');
-
-  if (!bookFile && !orderFile) {
-    alert('Пожалуйста, выберите хотя бы один файл: сборник песен (.docx) или файл порядка выхода (.docx/.txt/.csv).');
-    return;
-  }
-
-  logEl.textContent = `[${new Date().toLocaleTimeString()}] Запуск импорта DOCX...\n`;
-
-  try {
-    // 1. Парсинг порядка выхода песен (если файл указан)
-    parsedDocxOrderList = [];
-    if (orderFile) {
-      logEl.textContent += `[${new Date().toLocaleTimeString()}] Чтение файла порядка: ${orderFile.name}...\n`;
-      let orderLines = [];
-      if (orderFile.name.endsWith('.docx')) {
-        const { allParagraphs } = await extractParagraphsFromDocxFile(orderFile);
-        orderLines = allParagraphs;
-      } else {
-        const text = await orderFile.text();
-        orderLines = text.split(/\r?\n/);
+      // Extract title and metadata from leading lines
+      for (let i = 0; i < rawLines.length; i++) {
+        const l = rawLines[i].trim();
+        if (!l) continue;
+        if (/^#?\s*\d*\.?\s*[A-ZА-ЯЁ]/.test(l) && title === 'Без названия') {
+          title = cleanSongTitle(l);
+          capo = extractCapo(l) || '';
+          headerLinesCount = i + 1;
+          break;
+        }
       }
 
-      for (const line of orderLines) {
+      const song = {
+        id: defaultId,
+        number: parseInt(defaultId, 10) || 1,
+        title: title,
+        key_default: key,
+        capo: capo,
+        tempo: tempo,
+        author: 'Огненный ветер',
+        album: 'Сборник DOCX',
+        lines: []
+      };
+
+      const bodyLines = rawLines.slice(headerLinesCount);
+      let i = 0;
+      let currentSectionKind = 'verse-1';
+      let currentSectionKey = 'V1';
+      let hasExplicitSections = false;
+      let hasStartedFirstVerse = false;
+
+      while (i < bodyLines.length) {
+        const currentLine = bodyLines[i];
+        const trimmed = currentLine.trim();
+
+        if (!trimmed) {
+          song.lines.push({ kind: 'blank', lyric: '', chords: [] });
+          i++;
+          continue;
+        }
+
+        // 1. Проверяем наличие префикса секции на ТЕКУЩЕЙ строке (например, "1.", "Пр.", "Бр.")
+        const curSec = checkSectionPrefix(trimmed);
+        if (curSec) {
+          hasExplicitSections = true;
+          currentSectionKey = curSec.tag;
+          currentSectionKind = curSec.kind;
+          song.lines.push({
+            kind: curSec.tag.startsWith('C') ? 'chorus-header' : 'section-header',
+            sectionKey: currentSectionKey,
+            lyric: curSec.header,
+            chords: []
+          });
+
+          // Если после префикса есть остаток:
+          // Если остаток - это аккордовая строка, обновляем bodyLines[i] и продолжаем парсить ее как аккорды!
+          // Если обычный текст - обновляем bodyLines[i] и парсим дальше.
+          if (curSec.rest && curSec.rest.trim()) {
+            bodyLines[i] = curSec.rest;
+            continue;
+          }
+          i++;
+          continue;
+        }
+
+        // 2. Проверяем строчные заголовки интро/коды без аккордов
+        if (/^(вступление|интро|проигрыш|intro|outro|кода)[\s\.:]*(.*)$/i.test(trimmed) && !isChordLine(trimmed)) {
+          const m = trimmed.match(/^(вступление|интро|проигрыш|intro|outro|кода)[\s\.:]*(.*)$/i);
+          const tag = /outro|кода/i.test(m[1]) ? 'E' : 'Intro';
+          hasExplicitSections = true;
+          currentSectionKey = tag;
+          currentSectionKind = 'instrumental';
+          song.lines.push({
+            kind: 'section-header',
+            sectionKey: tag,
+            lyric: '[' + tag + ']',
+            chords: []
+          });
+          if (m[2] && m[2].trim()) {
+            bodyLines[i] = m[2];
+            continue;
+          }
+          i++;
+          continue;
+        }
+
+        // 3. Если в песне нет явных обозначений, создаем по умолчанию куплет [V1]
+        if (!hasExplicitSections && !hasStartedFirstVerse) {
+          hasStartedFirstVerse = true;
+          currentSectionKey = 'V1';
+          currentSectionKind = 'verse-1';
+          song.lines.push({
+            kind: 'section-header',
+            sectionKey: 'V1',
+            lyric: '[V1]',
+            chords: []
+          });
+        }
+
+        // 4. Проверяем, является ли текущая строка аккордовой
+        if (isChordLine(trimmed)) {
+          // Tokenize chords and their character offsets
+          // Pre-processing: split hyphen-separated chords (e.g. "Dm-E" -> "Dm E")
+          const processedChordLine = currentLine.replace(/([A-H][b#]?(?:m|maj|min|dim|aug|sus|add)?\d{0,2})[-—]+([A-H][b#]?)/g, '$1 $2');
+          const chordTokens = [];
+          const regex = /\S+/g;
+          let match;
+          while ((match = regex.exec(processedChordLine)) !== null) {
+            let chordName = match[0].replace(/[\*\*\(\)\[\]]/g, '');
+            // If still contains a hyphen between chord notes, split them
+            if (/^[A-H].*[-—][A-H]/.test(chordName)) {
+              const subparts = chordName.split(/[-—]+/);
+              subparts.forEach((sub, subIdx) => {
+                const subX = measureTextWidth(processedChordLine.substring(0, match.index) + ' '.repeat(subIdx * 3));
+                chordTokens.push({ text: sub, x: subX, rawCol: match.index + (subIdx * 3) });
+              });
+              continue;
+            }
+            // Calculate proportional X position in Times New Roman
+            const leadingSubstr = processedChordLine.substring(0, match.index);
+            const xPos = measureTextWidth(leadingSubstr);
+            chordTokens.push({ text: chordName, x: xPos, rawCol: match.index });
+          }
+
+          // Проверяем следующую строку: является ли она соответствующей строкой текста?
+          const nextLine = bodyLines[i + 1];
+          if (nextLine !== undefined && !isChordLine(nextLine.trim())) {
+            let lyricText = nextLine;
+
+            // КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ:
+            // Проверяем, начинается ли строка текста со спецмаркера секции: "Пр.", "Бр.", "1."
+            // Например:
+            // **F G**
+            // Пр. О, ты земля святая, здесь виден Арарат!
+            const nextSec = checkSectionPrefix(nextLine.trim());
+            if (nextSec) {
+              hasExplicitSections = true;
+              currentSectionKey = nextSec.tag;
+              currentSectionKind = nextSec.kind;
+              // Добавляем маркер секции перед строкой
+              song.lines.push({
+                kind: nextSec.tag.startsWith('C') ? 'chorus-header' : 'section-header',
+                sectionKey: currentSectionKey,
+                lyric: nextSec.header,
+                chords: []
+              });
+              // Очищаем текст строки от префикса "Пр." / "Бр." / "1."
+              lyricText = nextSec.rest || '';
+            }
+
+            const xs = computeCharXPositions(lyricText);
+            const snaps = buildLyricSnapPoints(lyricText, xs);
+            const assignedCharIndices = alignChordsDP(chordTokens, snaps, 16, lyricText, currentLine);
+
+            const chordsList = chordTokens.map((t, idx) => {
+              const charIdx = assignedCharIndices[idx] !== undefined ? assignedCharIndices[idx] : t.rawCol;
+              const targetX = xs[charIdx] || t.x;
+              const conf = computeChordConfidence(t.x, targetX);
+              return {
+                name: t.text,
+                charIndex: charIdx,
+                confidence: conf,
+                manual: false
+              };
+            });
+
+            song.lines.push({
+              kind: currentSectionKind,
+              sectionKey: currentSectionKey,
+              lyric: lyricText,
+              chords: chordsList
+            });
+
+            i += 2; // Обработана пара аккорды + текст
+            continue;
+          } else {
+            // Строка только с аккордами (например, вступление или соло)
+            const chordsList = chordTokens.map(t => ({
+              name: t.text,
+              charIndex: t.rawCol,
+              confidence: 0.9,
+              manual: false
+            }));
+
+            song.lines.push({
+              kind: currentSectionKind || 'instrumental',
+              sectionKey: currentSectionKey || 'Intro',
+              lyric: '',
+              chords: chordsList
+            });
+            i++;
+            continue;
+          }
+        } else if (trimmed.includes('[') && trimmed.includes(']')) {
+          // Строка уже в ChordPro разметке: [Am]Белый снег
+          const chordsList = [];
+          let cleanLyric = '';
+          let cIndex = 0;
+          const cpRegex = /\[(.*?)\]|([^\[]+)/g;
+          let cpMatch;
+
+          while ((cpMatch = cpRegex.exec(currentLine)) !== null) {
+            if (cpMatch[1]) {
+              chordsList.push({
+                name: cpMatch[1],
+                charIndex: cleanLyric.length,
+                confidence: 1.0,
+                manual: true
+              });
+            } else if (cpMatch[2]) {
+              cleanLyric += cpMatch[2];
+            }
+          }
+
+          song.lines.push({
+            kind: currentSectionKind || 'verse',
+            sectionKey: currentSectionKey,
+            lyric: cleanLyric,
+            chords: chordsList
+          });
+          i++;
+          continue;
+        } else {
+          // Обычная текстовая строка без аккордов
+          song.lines.push({
+            kind: currentSectionKind,
+            sectionKey: currentSectionKey,
+            lyric: currentLine,
+            chords: []
+          });
+          i++;
+        }
+      }
+
+      // Infer default key from the very first chord found
+      if (!song.key_default) {
+        for (const l of song.lines) {
+          if (l.chords && l.chords.length > 0) {
+            const firstC = l.chords[0].name;
+            song.key_default = (firstC === 'Dm' || firstC.startsWith('Dm/')) ? 'Am' : firstC;
+            break;
+          }
+        }
+      }
+
+      // Automatically determine and set OpenSong <presentation> order from parsed sections
+      if (!song.presentation) {
+        song.presentation = computeDefaultPresentation(song);
+      }
+
+      // Requirement: btn-realign-current-song is embedded into the core algorithm for all songs
+      realignSongModel(song);
+
+      return song;
+    }
+
+    // =========================================================================
+    // VISUAL DOM DRAG-AND-DROP EDITOR IMPLEMENTATION
+    // =========================================================================
+
+    function renderInteractiveEditor(song) {
+      const container = document.getElementById('interactive-editor');
+      if (!container) return;
+      if (!song) {
+        container.innerHTML = '<div style="text-align: center; color: var(--muted); padding: 3rem 1rem;">Нет выбранной песни для редактирования.</div>';
+        return;
+      }
+
+      container.innerHTML = '';
+
+      // Meta header form
+      const metaDiv = document.createElement('div');
+      metaDiv.className = 'editor-song-meta';
+      metaDiv.innerHTML = `
+        <div>
+          <label style="font-size: 0.72rem; color: var(--muted); display: block;">Название песни</label>
+          <input type="text" id="edit-song-title" value="${song.title || ''}" style="width: 100%; font-size: 0.85rem; font-weight: bold; padding: 0.2rem 0.4rem; border: 1px solid var(--border); border-radius: 4px;">
+        </div>
+        <div>
+          <label style="font-size: 0.72rem; color: var(--muted); display: block;">Тональность</label>
+          <input type="text" id="edit-song-key" value="${song.key_default || ''}" style="width: 100%; font-size: 0.85rem; padding: 0.2rem 0.4rem; border: 1px solid var(--border); border-radius: 4px;">
+        </div>
+        <div>
+          <label style="font-size: 0.72rem; color: var(--muted); display: block;">Каподастр</label>
+          <input type="text" id="edit-song-capo" value="${song.capo || ''}" style="width: 100%; font-size: 0.85rem; padding: 0.2rem 0.4rem; border: 1px solid var(--border); border-radius: 4px;">
+        </div>
+        <div>
+          <label style="font-size: 0.72rem; color: var(--muted); display: block;">Темп (BPM)</label>
+          <input type="text" id="edit-song-tempo" value="${song.tempo || ''}" style="width: 100%; font-size: 0.85rem; padding: 0.2rem 0.4rem; border: 1px solid var(--border); border-radius: 4px;">
+        </div>
+        <div style="grid-column: 1 / -1; margin-top: 0.2rem;">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <label style="font-size: 0.72rem; color: var(--muted); font-weight: 700;">Порядок воспроизведения &lt;presentation&gt; (OpenSong):</label>
+            <button type="button" id="btn-auto-presentation" style="font-size: 0.7rem; background: none; border: 1px solid var(--border); border-radius: 4px; padding: 1px 6px; cursor: pointer; color: var(--accent);">↺ Авто из секций</button>
+          </div>
+          <input type="text" id="edit-song-presentation" value="${song.presentation || computeDefaultPresentation(song) || ''}" placeholder="V1 C V2 C B C" style="width: 100%; font-size: 0.85rem; font-family: monospace; font-weight: 700; color: #b45309; padding: 0.25rem 0.4rem; border: 1px solid var(--border); border-radius: 4px;">
+        </div>
+      `;
+      container.appendChild(metaDiv);
+
+      // Bind meta inputs
+      document.getElementById('edit-song-title').addEventListener('input', (e) => { song.title = e.target.value; updateAllLivePreviews(); });
+      document.getElementById('edit-song-key').addEventListener('input', (e) => { song.key_default = e.target.value; updateAllLivePreviews(); });
+      document.getElementById('edit-song-capo').addEventListener('input', (e) => { song.capo = e.target.value; updateAllLivePreviews(); });
+      document.getElementById('edit-song-tempo').addEventListener('input', (e) => { song.tempo = e.target.value; updateAllLivePreviews(); });
+      document.getElementById('edit-song-presentation').addEventListener('input', (e) => { song.presentation = e.target.value; updateAllLivePreviews(); });
+      document.getElementById('btn-auto-presentation')?.addEventListener('click', () => {
+        const autoPres = computeDefaultPresentation(song);
+        song.presentation = autoPres;
+        document.getElementById('edit-song-presentation').value = autoPres;
+        updateAllLivePreviews();
+      });
+
+      // Render song lines
+      song.lines.forEach((line, lineIndex) => {
+        if (!line.lyric && (!line.chords || line.chords.length === 0)) return;
+
+        const lineBlock = document.createElement('div');
+        lineBlock.className = 'editor-line-block';
+
+        const lineHeader = document.createElement('div');
+        lineHeader.className = 'editor-line-header';
+        const currentLineKey = line.sectionKey || (line.lyric && line.lyric.match(/\[(.*?)\]/) ? line.lyric.match(/\[(.*?)\]/)[1] : (line.kind === 'chorus-header' || line.kind === 'chorus' ? 'C' : (line.kind === 'bridge' ? 'B' : 'V1')));
+        
+        lineHeader.innerHTML = `
+          <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <span>Строка ${lineIndex + 1}</span>
+            <label style="font-size: 0.7rem; color: var(--muted);">Ключ секции:</label>
+            <select class="line-section-key-select" data-line-index="${lineIndex}" style="font-size: 0.72rem; font-weight: 700; padding: 1px 4px; border-radius: 4px; border: 1px solid var(--border); background: var(--card-bg);">
+              <option value="V1" ${currentLineKey === 'V1' ? 'selected' : ''}>[V1] Куплет 1</option>
+              <option value="V2" ${currentLineKey === 'V2' ? 'selected' : ''}>[V2] Куплет 2</option>
+              <option value="V3" ${currentLineKey === 'V3' ? 'selected' : ''}>[V3] Куплет 3</option>
+              <option value="V4" ${currentLineKey === 'V4' ? 'selected' : ''}>[V4] Куплет 4</option>
+              <option value="C"  ${currentLineKey === 'C'  ? 'selected' : ''}>[C]  Припев</option>
+              <option value="C2" ${currentLineKey === 'C2' ? 'selected' : ''}>[C2] Припев 2</option>
+              <option value="B"  ${currentLineKey === 'B'  ? 'selected' : ''}>[B]  Бридж</option>
+              <option value="Intro" ${currentLineKey === 'Intro' ? 'selected' : ''}>[Intro] Вступление</option>
+              <option value="E"  ${currentLineKey === 'E'  ? 'selected' : ''}>[E]  Окончание</option>
+            </select>
+          </div>
+          <span style="font-size: 0.7rem; color: #94a3b8;">${line.chords ? line.chords.length : 0} аккордов</span>
+        `;
+
+        const secSelect = lineHeader.querySelector('.line-section-key-select');
+        if (secSelect) {
+          secSelect.addEventListener('change', (e) => {
+            const selectedVal = e.target.value;
+            line.sectionKey = selectedVal;
+            if (line.kind === 'section-header' || line.kind === 'chorus-header') {
+              line.lyric = `[${selectedVal}]`;
+              line.kind = selectedVal.startsWith('C') ? 'chorus-header' : 'section-header';
+            } else {
+              line.kind = selectedVal.startsWith('C') ? 'chorus' : (selectedVal.startsWith('B') ? 'bridge' : 'verse');
+            }
+            // Auto update presentation input
+            const presInput = document.getElementById('edit-song-presentation');
+            if (presInput) {
+              song.presentation = computeDefaultPresentation(song);
+              presInput.value = song.presentation;
+            }
+            updateAllLivePreviews();
+          });
+        }
+        lineBlock.appendChild(lineHeader);
+
+        const trackDiv = document.createElement('div');
+        trackDiv.className = 'editor-line-track';
+        trackDiv.dataset.lineIndex = lineIndex;
+
+        const textRow = document.createElement('div');
+        textRow.className = 'editor-text-row';
+
+        const chars = Array.from(line.lyric || ' ');
+        chars.forEach((char, charIdx) => {
+          const span = document.createElement('span');
+          span.className = 'char-cell';
+          span.dataset.charIndex = charIdx;
+          span.dataset.lineIndex = lineIndex;
+          span.textContent = char;
+
+          // Click on letter to quickly add chord
+          span.addEventListener('dblclick', () => {
+            const chordName = prompt('Введите имя аккорда над этим слогом (например, Am, G7, F#m):', 'Am');
+            if (chordName && chordName.trim()) {
+              if (!line.chords) line.chords = [];
+              line.chords.push({
+                name: chordName.trim(),
+                charIndex: charIdx,
+                confidence: 1.0,
+                manual: true
+              });
+              renderInteractiveEditor(song);
+              updateAllLivePreviews();
+            }
+          });
+
+          textRow.appendChild(span);
+        });
+
+        trackDiv.appendChild(textRow);
+
+        // Position Chords above text row
+        if (line.chords && line.chords.length > 0) {
+          line.chords.forEach((chord, chordIdx) => {
+            const chip = document.createElement('div');
+            chip.className = 'chord-chip';
+            chip.dataset.chordIndex = chordIdx;
+            chip.dataset.lineIndex = lineIndex;
+
+            // Confidence coloring
+            if (chord.confidence >= 0.8) chip.classList.add('conf-high');
+            else if (chord.confidence >= 0.5) chip.classList.add('conf-med');
+            else chip.classList.add('conf-low');
+
+            const chordDisplayName = chord.name || chord.chord || '';
+            chip.innerHTML = `<span>${chordDisplayName}</span><span class="btn-chip-del" title="Удалить аккорд">×</span>`;
+
+            // Delete chord handler
+            chip.querySelector('.btn-chip-del').addEventListener('click', (e) => {
+              e.stopPropagation();
+              line.chords.splice(chordIdx, 1);
+              renderInteractiveEditor(song);
+              updateAllLivePreviews();
+            });
+
+            // Edit chord name on click
+            chip.querySelector('span').addEventListener('click', (e) => {
+              e.stopPropagation();
+              const newName = prompt('Изменить аккорд:', chord.name);
+              if (newName && newName.trim()) {
+                chord.name = newName.trim();
+                chord.manual = true;
+                renderInteractiveEditor(song);
+                updateAllLivePreviews();
+              }
+            });
+
+            // Make Draggable
+            setupChordDrag(chip, chord, line, trackDiv, textRow, song);
+
+            trackDiv.appendChild(chip);
+          });
+        }
+
+        lineBlock.appendChild(trackDiv);
+        container.appendChild(lineBlock);
+      });
+
+      // Align chip positions after DOM layout render
+      requestAnimationFrame(() => positionAllChipsInEditor());
+      updateQualityConfidenceBadges();
+      updateAllLivePreviews();
+    }
+
+    /**
+     * Compute horizontal pixel coordinates for each chord chip based on target char cell rect
+     */
+    function positionAllChipsInEditor() {
+      const tracks = document.querySelectorAll('.editor-line-track');
+      tracks.forEach(track => {
+        const lineIdx = parseInt(track.dataset.lineIndex, 10);
+        const textRow = track.querySelector('.editor-text-row');
+        if (!textRow) return;
+
+        const charCells = textRow.querySelectorAll('.char-cell');
+        const chips = track.querySelectorAll('.chord-chip');
+
+        chips.forEach(chip => {
+          const chordIdx = parseInt(chip.dataset.chordIndex, 10);
+          const line = activeSongModel.lines[lineIdx];
+          if (!line || !line.chords || !line.chords[chordIdx]) return;
+          const chord = line.chords[chordIdx];
+
+          const targetChar = charCells[chord.charIndex];
+          if (targetChar) {
+            const charRect = targetChar.getBoundingClientRect();
+            const trackRect = track.getBoundingClientRect();
+            const leftOffset = (charRect.left - trackRect.left) + (charRect.width / 2);
+            chip.style.left = `${Math.max(12, leftOffset)}px`;
+          } else {
+            // Position at end of line
+            chip.style.left = `${textRow.offsetWidth + 10}px`;
+          }
+        });
+      });
+    }
+
+    /**
+     * Setup drag-and-drop interaction with magnetic syllable snapping
+     */
+    function setupChordDrag(chip, chord, line, trackDiv, textRow, song) {
+      let isDragging = false;
+      let startX = 0;
+      let initialLeft = 0;
+
+      chip.addEventListener('mousedown', (e) => {
+        if (e.target.classList.contains('btn-chip-del')) return;
+        isDragging = true;
+        startX = e.clientX;
+        initialLeft = parseFloat(chip.style.left) || 20;
+        chip.classList.add('selected');
+        e.preventDefault();
+
+        const charCells = Array.from(textRow.querySelectorAll('.char-cell'));
+
+        function onMouseMove(ev) {
+          if (!isDragging) return;
+          const dx = ev.clientX - startX;
+          const newLeft = Math.max(10, initialLeft + dx);
+          chip.style.left = `${newLeft}px`;
+
+          // Find closest char cell (magnetic snap)
+          const trackRect = trackDiv.getBoundingClientRect();
+          let closestChar = null;
+          let minDistance = Infinity;
+
+          charCells.forEach(cell => {
+            const cellRect = cell.getBoundingClientRect();
+            const cellCenter = (cellRect.left - trackRect.left) + (cellRect.width / 2);
+            const dist = Math.abs(cellCenter - newLeft);
+            if (dist < minDistance) {
+              minDistance = dist;
+              closestChar = cell;
+            }
+          });
+
+          charCells.forEach(c => c.classList.remove('snap-target'));
+          if (closestChar && minDistance < 35) {
+            closestChar.classList.add('snap-target');
+          }
+        }
+
+        function onMouseUp(ev) {
+          if (!isDragging) return;
+          isDragging = false;
+          chip.classList.remove('selected');
+          window.removeEventListener('mousemove', onMouseMove);
+          window.removeEventListener('mouseup', onMouseUp);
+
+          // Find snapped target
+          const activeSnap = textRow.querySelector('.char-cell.snap-target');
+          if (activeSnap) {
+            chord.charIndex = parseInt(activeSnap.dataset.charIndex, 10);
+            chord.confidence = 1.0;
+            chord.manual = true;
+            activeSnap.classList.remove('snap-target');
+          }
+
+          saveEditorState('Move Chord');
+          renderInteractiveEditor(song);
+          updateAllLivePreviews();
+        }
+
+        window.addEventListener('mousemove', onMouseMove);
+        window.addEventListener('mouseup', onMouseUp);
+      });
+    }
+
+    /**
+     * Update quality control stats badges (green / yellow / red)
+     */
+    function updateQualityConfidenceBadges() {
+      let high = 0, med = 0, low = 0;
+      if (activeSongModel && activeSongModel.lines) {
+        activeSongModel.lines.forEach(l => {
+          if (l.chords) {
+            l.chords.forEach(c => {
+              if (c.confidence >= 0.8) high++;
+              else if (c.confidence >= 0.5) med++;
+              else low++;
+            });
+          }
+        });
+      }
+      const elHigh = document.getElementById('stat-high-conf');
+      const elMed = document.getElementById('stat-med-conf');
+      const elLow = document.getElementById('stat-low-conf');
+      if (elHigh) elHigh.textContent = `🟢 ${high}`;
+      if (elMed) elMed.textContent = `🟡 ${med}`;
+      if (elLow) elLow.textContent = `🔴 ${low}`;
+    }
+
+    let isInternalSyncing = false;
+
+    /**
+     * Refresh all live preview tabs (OpenSong, ChordPro, Plain Text)
+     */
+    function updateAllLivePreviews() {
+      if (!activeSongModel || isInternalSyncing) return;
+      const osView = document.getElementById('live-opensong-view');
+      const cpView = document.getElementById('live-chordpro-view');
+      const plainView = document.getElementById('live-plain-view');
+
+      // Update without overwriting user cursor if they are currently typing in that textarea
+      if (osView && document.activeElement !== osView) osView.value = serializeSongToOpenSongXml(activeSongModel);
+      if (cpView && document.activeElement !== cpView) cpView.value = serializeSongToChordPro(activeSongModel);
+      if (plainView && document.activeElement !== plainView) plainView.value = serializeSongToPlainText(activeSongModel);
+    }
+
+    /**
+     * Parse OpenSong text or XML directly from the right-hand textarea and sync to activeSongModel + left editor
+     */
+    
+    // =========================================================================
+    // ТОЧНЫЙ ПАРСЕР ТЕКСТА OPENSONG В МОДЕЛЬ РЕДАКТОРА
+    // =========================================================================
+    function buildModelFromOpenSongLyrics(lyricsText, songMeta = {}) {
+      const model = {
+        id: songMeta.id || '0001',
+        number: songMeta.number || parseInt(songMeta.id, 10) || 1,
+        title: songMeta.title || 'Без названия',
+        key_default: songMeta.key || songMeta.key_default || '',
+        capo: songMeta.capo || '',
+        tempo: songMeta.tempo || '',
+        author: songMeta.author || 'Огненный ветер',
+        lines: []
+      };
+
+      if (!lyricsText) return model;
+
+      // Check if it is XML wrapped
+      let text = lyricsText;
+      const mXml = lyricsText.match(/<lyrics>([\s\S]*?)<\/lyrics>/i);
+      if (mXml) text = mXml[1].trim();
+
+      const rawLines = text.split(/\r?\n/);
+      let i = 0;
+
+      while (i < rawLines.length) {
+        const line = rawLines[i];
+        const trimmed = line.trim();
+
+        if (!trimmed) {
+          model.lines.push({ kind: 'blank', lyric: '', chords: [] });
+          i++;
+          continue;
+        }
+
+        // 1. OpenSong Dot Chord line (.Am   G   C)
+        if (line.startsWith('.')) {
+          const chordLine = line.substring(1);
+          let lyricStr = '';
+          const nextLine = rawLines[i + 1];
+
+          // Next line is the text matching this chord line
+          if (nextLine !== undefined && !nextLine.startsWith('.') && !nextLine.startsWith('[')) {
+            lyricStr = nextLine.startsWith(' ') ? nextLine.substring(1) : nextLine;
+            i += 2;
+          } else {
+            i += 1;
+          }
+
+          const chords = [];
+          const regex = /\S+/g;
+          let m;
+          while ((m = regex.exec(chordLine)) !== null) {
+            chords.push({
+              name: m[0],
+              chord: m[0],
+              charIndex: Math.max(0, m.index),
+              confidence: 1.0,
+              manual: true
+            });
+          }
+
+          model.lines.push({
+            kind: 'verse',
+            lyric: lyricStr,
+            chords: chords
+          });
+          continue;
+        }
+
+        // 2. OpenSong Section marker ([V1], [C], [Куплет 1], etc.)
+        if (line.startsWith('[') && line.endsWith(']')) {
+          const isChorus = /припев|chorus|\[c/i.test(line);
+          model.lines.push({
+            kind: isChorus ? 'chorus-header' : 'section-header',
+            lyric: line,
+            chords: []
+          });
+          i++;
+          continue;
+        }
+
+        // 3. Regular lyric line (prefixed with space in OpenSong or normal text)
+        const lyricStr = line.startsWith(' ') ? line.substring(1) : line;
+        model.lines.push({
+          kind: 'verse',
+          lyric: lyricStr,
+          chords: []
+        });
+        i++;
+      }
+
+      return model;
+    }
+
+    function parseOpenSongLyricsToModel(rawText) {
+      if (!activeSongModel) return;
+      let lyricsText = rawText;
+      
+      // If it contains <lyrics> XML tags, extract inner lyrics
+      const matchLyrics = rawText.match(/<lyrics>([\s\S]*?)<\/lyrics>/i);
+      if (matchLyrics) {
+        lyricsText = matchLyrics[1].trim();
+        // Also extract title, key, capo if present
+        const mTitle = rawText.match(/<title>([\s\S]*?)<\/title>/i);
+        if (mTitle) activeSongModel.title = mTitle[1].trim();
+        const mKey = rawText.match(/<key>([\s\S]*?)<\/key>/i);
+        if (mKey) activeSongModel.key_default = mKey[1].trim();
+        const mCapo = rawText.match(/<capo[^>]*>([\s\S]*?)<\/capo>/i);
+        if (mCapo) activeSongModel.capo = mCapo[1].trim();
+        const mTempo = rawText.match(/<tempo>([\s\S]*?)<\/tempo>/i);
+        if (mTempo) activeSongModel.tempo = mTempo[1].trim();
+      }
+
+      const lines = lyricsText.split(/\r?\n/);
+      const newLines = [];
+      let i = 0;
+
+      while (i < lines.length) {
+        const line = lines[i];
+        if (line.startsWith('.')) {
+          // Chord line in OpenSong
+          const chordLine = line.substring(1);
+          const nextLine = lines[i + 1];
+          let lyricStr = '';
+          if (nextLine !== undefined && !nextLine.startsWith('.') && !nextLine.startsWith('[')) {
+            lyricStr = nextLine.startsWith(' ') ? nextLine.substring(1) : nextLine;
+            i += 2;
+          } else {
+            i += 1;
+          }
+
+          // Extract chords and character column offsets (each space = 1 charIndex)
+          const chords = [];
+          const regex = /\S+/g;
+          let m;
+          while ((m = regex.exec(chordLine)) !== null) {
+            chords.push({
+              name: m[0],
+              charIndex: Math.max(0, m.index),
+              confidence: 1.0,
+              manual: true
+            });
+          }
+
+          newLines.push({
+            kind: 'verse',
+            lyric: lyricStr,
+            chords: chords
+          });
+        } else if (line.startsWith('[')) {
+          // Section header [V1], [C], etc.
+          const sec = line.toLowerCase();
+          const kind = sec.includes('c') ? 'chorus' : (sec.includes('b') ? 'bridge' : 'verse');
+          newLines.push({ kind: kind, lyric: line, chords: [] });
+          i++;
+        } else if (!line.trim()) {
+          newLines.push({ kind: 'blank', lyric: '', chords: [] });
+          i++;
+        } else {
+          // Lyric line without chords
+          const lyricStr = line.startsWith(' ') ? line.substring(1) : line;
+          newLines.push({ kind: 'verse', lyric: lyricStr, chords: [] });
+          i++;
+        }
+      }
+
+      activeSongModel.lines = newLines;
+      renderInteractiveEditor(activeSongModel);
+    }
+
+    /**
+     * Parse ChordPro directly from the right-hand textarea
+     */
+    function parseChordProTextToModel(chordProText) {
+      if (!activeSongModel) return;
+      const lines = chordProText.split(/\r?\n/);
+      const newLines = [];
+
+      lines.forEach(line => {
+        const trimmed = line.trim();
+        if (!trimmed) {
+          newLines.push({ kind: 'blank', lyric: '', chords: [] });
+          return;
+        }
+
+        // Meta tags
+        const mMeta = trimmed.match(/^{(title|key|capo|tempo):\s*(.*?)}/i);
+        if (mMeta) {
+          const field = mMeta[1].toLowerCase();
+          const val = mMeta[2].trim();
+          if (field === 'title') activeSongModel.title = val;
+          if (field === 'key') activeSongModel.key_default = val;
+          if (field === 'capo') activeSongModel.capo = val;
+          if (field === 'tempo') activeSongModel.tempo = val;
+          return;
+        }
+
+        // Parse inline chords [Am]
+        const chords = [];
+        let cleanLyric = '';
+        const regex = /\[([^\]]+)\]|([^\[]+)/g;
+        let match;
+        while ((match = regex.exec(line)) !== null) {
+          if (match[1]) {
+            chords.push({
+              name: match[1],
+              charIndex: cleanLyric.length,
+              confidence: 1.0,
+              manual: true
+            });
+          } else if (match[2]) {
+            cleanLyric += match[2];
+          }
+        }
+
+        newLines.push({
+          kind: 'verse',
+          lyric: cleanLyric,
+          chords: chords
+        });
+      });
+
+      activeSongModel.lines = newLines;
+      renderInteractiveEditor(activeSongModel);
+    }
+
+    // Set up 2-way real-time input listeners on right-side editors
+    function setupTwoWaySyncListeners() {
+      const osView = document.getElementById('live-opensong-view');
+      const cpView = document.getElementById('live-chordpro-view');
+
+      if (osView) {
+        let osTimer = null;
+        osView.addEventListener('input', () => {
+          clearTimeout(osTimer);
+          osTimer = setTimeout(() => {
+            isInternalSyncing = true;
+            try {
+              parseOpenSongLyricsToModel(osView.value);
+              // Also sync ChordPro and Plain text views
+              if (cpView) cpView.value = serializeSongToChordPro(activeSongModel);
+              const plainView = document.getElementById('live-plain-view');
+              if (plainView) plainView.value = serializeSongToPlainText(activeSongModel);
+            } finally {
+              isInternalSyncing = false;
+            }
+          }, 250);
+        });
+      }
+
+      if (cpView) {
+        let cpTimer = null;
+        cpView.addEventListener('input', () => {
+          clearTimeout(cpTimer);
+          cpTimer = setTimeout(() => {
+            isInternalSyncing = true;
+            try {
+              parseChordProTextToModel(cpView.value);
+              if (osView) osView.value = serializeSongToOpenSongXml(activeSongModel);
+              const plainView = document.getElementById('live-plain-view');
+              if (plainView) plainView.value = serializeSongToPlainText(activeSongModel);
+            } finally {
+              isInternalSyncing = false;
+            }
+          }, 250);
+        });
+      }
+    }
+
+    // Guaranteed Bulletproof Tab Switching Mechanism
+    function switchPreviewTab(targetPtabId) {
+      const allBtns = document.querySelectorAll('.preview-tab-btn');
+      const allPanes = document.querySelectorAll('.ptab-content');
+
+      allBtns.forEach(btn => {
+        if (btn.dataset.ptab === targetPtabId) btn.classList.add('active');
+        else btn.classList.remove('active');
+      });
+
+      allPanes.forEach(pane => {
+        if (pane.id === targetPtabId) {
+          pane.style.setProperty('display', 'block', 'important');
+        } else {
+          pane.style.setProperty('display', 'none', 'important');
+        }
+      });
+    }
+
+    // Bind click directly to container and document
+    document.addEventListener('click', (e) => {
+      const btn = e.target.closest('.preview-tab-btn');
+      if (!btn) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const targetPtab = btn.dataset.ptab;
+      if (targetPtab) switchPreviewTab(targetPtab);
+    });
+
+    // Initialize 2-way sync
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', setupTwoWaySyncListeners);
+    } else {
+      setupTwoWaySyncListeners();
+    }
+
+    // =========================================================================
+    // EXPORT & PRINT ENGINES (OpenSong XML, ChordPro .cho, PDF Print, DOCX)
+    // =========================================================================
+
+    // 1. Export OpenSong XML file with normalized 4-digit ID prefix
+    document.getElementById('btn-export-opensong-xml')?.addEventListener('click', () => {
+      if (!activeSongModel) { alert('Сначала загрузите или выберите песню.'); return; }
+      const xml = serializeSongToOpenSongXml(activeSongModel);
+      const normId = String(activeSongModel.id || activeSongModel.number || '1').padStart(4, '0');
+      const safeTitle = (activeSongModel.title || 'song').replace(/[\\/:*?"<>|]/g, '_');
+      const filename = `${normId}_${safeTitle}.xml`;
+      downloadTextFile(xml, filename, 'application/xml;charset=utf-8;');
+      recordProcessedOpenSong(normId, filename);
+    });
+
+    // 2. Export ChordPro .cho file with normalized 4-digit ID prefix
+    document.getElementById('btn-export-chordpro-txt')?.addEventListener('click', () => {
+      if (!activeSongModel) { alert('Сначала загрузите или выберите песню.'); return; }
+      const cho = serializeSongToChordPro(activeSongModel);
+      const normId = String(activeSongModel.id || activeSongModel.number || '1').padStart(4, '0');
+      const safeTitle = (activeSongModel.title || 'song').replace(/[\\/:*?"<>|]/g, '_');
+      const filename = `${normId}_${safeTitle}.cho`;
+      downloadTextFile(cho, filename, 'text/plain;charset=utf-8;');
+    });
+
+    // 3. Print / Generate PDF (clean isolated iframe print)
+    document.getElementById('btn-print-html-pdf')?.addEventListener('click', () => {
+      if (!activeSongModel) { alert('Сначала загрузите или выберите песню.'); return; }
+      const osLyrics = serializeSongToOpenSongLyrics(activeSongModel);
+      
+      const iframe = document.createElement('iframe');
+      iframe.style.position = 'fixed';
+      iframe.style.right = '0';
+      iframe.style.bottom = '0';
+      iframe.style.width = '0';
+      iframe.style.height = '0';
+      iframe.style.border = '0';
+      document.body.appendChild(iframe);
+
+      const doc = iframe.contentWindow.document;
+      const keyStr = activeSongModel.key_default ? 'Тональность: <b>' + activeSongModel.key_default + '</b>' : '';
+      const capoStr = activeSongModel.capo ? ' | Капо: <b>' + activeSongModel.capo + '</b>' : '';
+      const tempoStr = activeSongModel.tempo ? ' | Темп: <b>' + activeSongModel.tempo + '</b>' : '';
+      const renderedLyrics = osLyrics.split('\n').map(l => l.startsWith('.') ? '<span class="chord-line">' + l.substring(1) + '</span>' : l).join('\n');
+
+      doc.open();
+      doc.write(
+        '<' + '!DOCTYPE html><' + 'html><' + 'head><meta charset="utf-8"><title>' + (activeSongModel.title || 'Песня') + '</title>' +
+        '<' + 'style>@page{size:A4;margin:15mm;}body{font-family:"Times New Roman",Times,serif;font-size:14pt;line-height:1.4;color:#000;padding:15mm;}h1{text-align:center;font-size:20pt;margin-bottom:4px;text-transform:uppercase;}.meta{text-align:center;font-size:11pt;color:#555;margin-bottom:20px;}pre{font-family:"Times New Roman",Times,serif;font-size:13pt;line-height:1.35;white-space:pre-wrap;word-wrap:break-word;}.chord-line{font-weight:bold;color:#111;}<' + '/style>' +
+        '<' + '/head><' + 'body>' +
+        '<h1>' + (activeSongModel.title || '') + '</h1>' +
+        '<div class="meta">' + keyStr + capoStr + tempoStr + '</div>' +
+        '<pre>' + renderedLyrics + '</pre>' +
+        '<' + '/body><' + '/html>'
+      );
+      doc.close();
+
+      setTimeout(() => {
+        iframe.contentWindow.focus();
+        iframe.contentWindow.print();
+        setTimeout(() => document.body.removeChild(iframe), 2000);
+      }, 300);
+    });
+
+    // 4. Export Clean DOCX for Print
+    document.getElementById('btn-export-song-docx')?.addEventListener('click', async () => {
+      if (!activeSongModel) { alert('Сначала загрузите или выберите песню.'); return; }
+      
+      const zip = new JSZip();
+      const osLyrics = serializeSongToOpenSongLyrics(activeSongModel);
+      const lines = osLyrics.split('\n');
+
+      let paragraphsXml = '';
+      paragraphsXml += `<w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/><w:b/><w:sz w:val="36"/></w:rPr><w:t>${activeSongModel.title}</w:t></w:r></w:p>`;
+      
+      const metaStr = `Тональность: ${activeSongModel.key_default || '—'}  Капо: ${activeSongModel.capo || '—'}  Темп: ${activeSongModel.tempo || '—'}`;
+      paragraphsXml += `<w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/><w:i/><w:sz w:val="22"/><w:color w:val="666666"/></w:rPr><w:t>${metaStr}</w:t></w:r></w:p>`;
+      paragraphsXml += `<w:p><w:r><w:t></w:t></w:r></w:p>`;
+
+      for (const l of lines) {
+        if (!l.trim()) {
+          paragraphsXml += `<w:p><w:r><w:t></w:t></w:r></w:p>`;
+          continue;
+        }
+        if (l.startsWith('.')) {
+          // Chord line: Bold
+          paragraphsXml += `<w:p><w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/><w:b/><w:sz w:val="24"/></w:rPr><w:t xml:space="preserve">${l.substring(1)}</w:t></w:r></w:p>`;
+        } else {
+          // Lyric line: Regular
+          paragraphsXml += `<w:p><w:r><w:rPr><w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman"/><w:sz w:val="24"/></w:rPr><w:t xml:space="preserve">${l}</w:t></w:r></w:p>`;
+        }
+      }
+
+      // Minimal valid DOCX document structure
+      zip.file('[Content_Types].xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+</Types>`);
+
+      zip.file('_rels/.rels', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
+</Relationships>`);
+
+      zip.file('word/document.xml', `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>
+    ${paragraphsXml}
+  </w:body>
+</w:document>`);
+
+      const blob = await zip.generateAsync({ type: 'blob' });
+      const filename = `${activeSongModel.title || 'song'}.docx`;
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    });
+
+    // 5. Batch Export all parsed songs to a single ZIP
+    document.getElementById('btn-export-all-zip')?.addEventListener('click', async () => {
+      if (!parsedDocxSongs || parsedDocxSongs.length === 0) {
+        alert('Нет распознанных песен для скачивания.');
+        return;
+      }
+
+      const zip = new JSZip();
+      let count = 0;
+
+      parsedDocxSongs.forEach((song, idx) => {
+        const baseName = `${song.id || String(idx+1).padStart(4,'0')}_${(song.title || 'song').replace(/[\\/:*?"<>|]/g, '_')}`;
+        // Add OpenSong XML
+        if (song.rawModel) {
+          zip.file(`opensong/${baseName}.xml`, serializeSongToOpenSongXml(song.rawModel));
+          zip.file(`chordpro/${baseName}.cho`, serializeSongToChordPro(song.rawModel));
+        } else {
+          zip.file(`chordpro/${baseName}.cho`, song.body_chordpro || '');
+        }
+        count++;
+      });
+
+      const blob = await zip.generateAsync({ type: 'blob' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `songs_archive_opensong_chordpro_${formatBackupTimestamp()}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      alert(`Сформирован ZIP архив с ${count} песнями в форматах OpenSong XML и ChordPro!`);
+    });
+
+    function downloadTextFile(content, filename, mimeType) {
+      const blob = new Blob([content], { type: mimeType });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    }
+
+
+    
+    // =========================================================================
+    // DEEP HISTORY (UNDO / REDO UP TO 50 STATES)
+    // =========================================================================
+    const MAX_HISTORY_STATES = 50;
+    let undoStack = [];
+    let redoStack = [];
+    let isExecutingHistoryAction = false;
+
+    function saveEditorState(description = '') {
+      if (!activeSongModel || isExecutingHistoryAction) return;
+      const snapshot = JSON.stringify(activeSongModel);
+      // Avoid duplicate consecutive snapshots
+      if (undoStack.length > 0 && undoStack[undoStack.length - 1].data === snapshot) return;
+      
+      undoStack.push({ data: snapshot, desc: description, time: Date.now() });
+      if (undoStack.length > MAX_HISTORY_STATES) undoStack.shift();
+      redoStack = []; // Clear forward history on new edit
+      updateHistoryButtonsUI();
+    }
+
+    function performUndo() {
+      if (undoStack.length <= 1) return;
+      const currentState = undoStack.pop();
+      redoStack.push(currentState);
+
+      const prevState = undoStack[undoStack.length - 1];
+      isExecutingHistoryAction = true;
+      try {
+        activeSongModel = JSON.parse(prevState.data);
+        if (parsedDocxSongs && parsedDocxSongs[currentSongIndex]) {
+          parsedDocxSongs[currentSongIndex].rawModel = activeSongModel;
+        }
+        renderInteractiveEditor(activeSongModel);
+        updateAllLivePreviews();
+      } finally {
+        isExecutingHistoryAction = false;
+      }
+      updateHistoryButtonsUI();
+    }
+
+    function performRedo() {
+      if (redoStack.length === 0) return;
+      const nextState = redoStack.pop();
+      undoStack.push(nextState);
+
+      isExecutingHistoryAction = true;
+      try {
+        activeSongModel = JSON.parse(nextState.data);
+        if (parsedDocxSongs && parsedDocxSongs[currentSongIndex]) {
+          parsedDocxSongs[currentSongIndex].rawModel = activeSongModel;
+        }
+        renderInteractiveEditor(activeSongModel);
+        updateAllLivePreviews();
+      } finally {
+        isExecutingHistoryAction = false;
+      }
+      updateHistoryButtonsUI();
+    }
+
+    function updateHistoryButtonsUI() {
+      const btnUndo = document.getElementById('btn-editor-undo');
+      const btnRedo = document.getElementById('btn-editor-redo');
+      const badge = document.getElementById('history-steps-badge');
+      if (btnUndo) btnUndo.disabled = (undoStack.length <= 1);
+      if (btnRedo) btnRedo.disabled = (redoStack.length === 0);
+      if (badge) badge.textContent = `${Math.max(0, undoStack.length - 1)}/50`;
+    }
+
+    // Keyboard Shortcuts: Ctrl+Z (Undo) and Ctrl+Y / Ctrl+Shift+Z (Redo)
+    window.addEventListener('keydown', (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
+        if (e.shiftKey) {
+          e.preventDefault();
+          performRedo();
+        } else {
+          e.preventDefault();
+          performUndo();
+        }
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') {
+        e.preventDefault();
+        performRedo();
+      }
+    });
+
+    document.getElementById('btn-editor-undo')?.addEventListener('click', performUndo);
+    document.getElementById('btn-editor-redo')?.addEventListener('click', performRedo);
+
+    // =========================================================================
+    // REGISTRY OF PROCESSED OPENSONG XML FILES
+    // (Local storage & folder scanning: songs with matching normalized 4-digit ID glow GREEN)
+    // =========================================================================
+    let processedOpenSongMap = new Map(); // normalizedId -> filename/title
+
+    function loadKnownOpenSongFiles() {
+      try {
+        const stored = localStorage.getItem('ov_processed_opensong_ids');
+        if (stored) {
+          const arr = JSON.parse(stored);
+          arr.forEach(item => processedOpenSongMap.set(String(item.id).padStart(4, '0'), item.name));
+        }
+      } catch (e) {
+        console.warn('Error loading known opensong registry:', e);
+      }
+    }
+
+    function recordProcessedOpenSong(idStr, nameStr) {
+      const norm = String(idStr).padStart(4, '0');
+      processedOpenSongMap.set(norm, nameStr);
+      try {
+        const arr = [];
+        processedOpenSongMap.forEach((name, id) => arr.push({ id, name }));
+        localStorage.setItem('ov_processed_opensong_ids', JSON.stringify(arr));
+      } catch (e) {}
+      renderParsedSongsList();
+    }
+
+    // Preload known registry on startup
+    loadKnownOpenSongFiles();
+
+    // =========================================================================
+    // OPENGSONG XML IMPORT ENGINE (Single or Multiple files / Folder)
+    // =========================================================================
+    const btnPickFiles = document.getElementById('btn-pick-opensong-files');
+    const btnPickFolder = document.getElementById('btn-pick-opensong-folder');
+    const inputOpenSongFiles = document.getElementById('input-opensong-files');
+    const inputOpenSongFolder = document.getElementById('input-opensong-folder');
+    const opensongDropzone = document.getElementById('opensong-dropzone');
+
+    btnPickFiles?.addEventListener('click', (e) => { e.stopPropagation(); inputOpenSongFiles.click(); });
+    btnPickFolder?.addEventListener('click', (e) => { e.stopPropagation(); inputOpenSongFolder.click(); });
+    opensongDropzone?.addEventListener('click', () => inputOpenSongFiles.click());
+
+    opensongDropzone?.addEventListener('dragover', (e) => { e.preventDefault(); opensongDropzone.classList.add('dragover'); });
+    opensongDropzone?.addEventListener('dragleave', () => opensongDropzone.classList.remove('dragover'));
+    opensongDropzone?.addEventListener('drop', async (e) => {
+      e.preventDefault();
+      opensongDropzone.classList.remove('dragover');
+      if (e.dataTransfer.files.length) handleOpenSongFilesBatch(Array.from(e.dataTransfer.files));
+    });
+
+    inputOpenSongFiles?.addEventListener('change', (e) => {
+      if (e.target.files.length) handleOpenSongFilesBatch(Array.from(e.target.files));
+    });
+    inputOpenSongFolder?.addEventListener('change', (e) => {
+      if (e.target.files.length) handleOpenSongFilesBatch(Array.from(e.target.files));
+    });
+
+    /**
+     * Batch import OpenSong XML files
+     */
+    async function handleOpenSongFilesBatch(files) {
+      const xmlFiles = files.filter(f => f.name.endsWith('.xml') || f.name.endsWith('.opensong') || f.type.includes('xml'));
+      if (xmlFiles.length === 0) {
+        alert('В выбранных файлах не найдено документов OpenSong (.xml).');
+        return;
+      }
+
+      appendLog(`[OpenSong Импорт] Обработка ${xmlFiles.length} файлов...`);
+      let loadedCount = 0;
+
+      for (const file of xmlFiles) {
+        try {
+          const text = await file.text();
+          // Extract normalized ID from filename: "0482_Белый снег.xml" or tag
+          let idMatch = file.name.match(/^(\d{1,4})/);
+          let idStr = idMatch ? String(idMatch[1]).padStart(4, '0') : '';
+
+          const parser = new DOMParser();
+          const xmlDoc = parser.parseFromString(text, 'text/xml');
+          const title = (xmlDoc.querySelector('title')?.textContent || file.name.replace(/\.[^.]+$/, '')).trim();
+          const author = (xmlDoc.querySelector('author')?.textContent || 'Огненный ветер').trim();
+          const key_line = (xmlDoc.querySelector('key')?.textContent || '').trim();
+          const capo = (xmlDoc.querySelector('capo')?.textContent || '').trim();
+          const tempo = (xmlDoc.querySelector('tempo')?.textContent || '').trim();
+          const lyricsBody = xmlDoc.querySelector('lyrics')?.textContent || '';
+
+          if (!idStr) {
+            // Check if title or db has number
+            const normTitle = normalizeSongTitle(title);
+            const foundInDb = dbSongs.find(s => normalizeSongTitle(s.title) === normTitle);
+            if (foundInDb) idStr = foundInDb.id;
+            else idStr = String(parsedDocxSongs.length + 1).padStart(4, '0');
+          }
+
+          // Register in processed map
+          recordProcessedOpenSong(idStr, file.name);
+
+          // Build song model from OpenSong lyrics
+          const songModel = {
+            id: idStr,
+            number: parseInt(idStr, 10) || (parsedDocxSongs.length + 1),
+            title: title,
+            key_default: key_line,
+            capo: capo,
+            tempo: tempo,
+            author: author,
+            album: 'OpenSong XML',
+            lines: []
+          };
+
+          // Parse lyrics into canonical lines
+          const rawLines = lyricsBody.split(/\r?\n/);
+          let lIdx = 0;
+          while (lIdx < rawLines.length) {
+            const curL = rawLines[lIdx];
+            if (curL.startsWith('.')) {
+              const chordLine = curL.substring(1);
+              const nextL = rawLines[lIdx + 1];
+              let lyricStr = '';
+              if (nextL !== undefined && !nextL.startsWith('.') && !nextL.startsWith('[')) {
+                lyricStr = nextL.startsWith(' ') ? nextL.substring(1) : nextL;
+                lIdx += 2;
+              } else {
+                lIdx += 1;
+              }
+
+              const chords = [];
+              const regex = /\S+/g;
+              let m;
+              while ((m = regex.exec(chordLine)) !== null) {
+                chords.push({
+                  name: m[0],
+                  charIndex: Math.max(0, m.index),
+                  confidence: 1.0,
+                  manual: true
+                });
+              }
+
+              songModel.lines.push({ kind: 'verse', lyric: lyricStr, chords });
+            } else if (curL.startsWith('[')) {
+              const sec = curL.toLowerCase();
+              const kind = sec.includes('c') ? 'chorus' : (sec.includes('b') ? 'bridge' : 'verse');
+              songModel.lines.push({ kind, lyric: curL, chords: [] });
+              lIdx++;
+            } else if (!curL.trim()) {
+              songModel.lines.push({ kind: 'blank', lyric: '', chords: [] });
+              lIdx++;
+            } else {
+              const lyricStr = curL.startsWith(' ') ? curL.substring(1) : curL;
+              songModel.lines.push({ kind: 'verse', lyric: lyricStr, chords: [] });
+              lIdx++;
+            }
+          }
+
+          parsedDocxSongs.push({
+            id: idStr,
+            number: songModel.number,
+            title: songModel.title,
+            key_default: songModel.key_default,
+            capo: songModel.capo,
+            tempo: songModel.tempo,
+            alt_title: file.name,
+            body_chordpro: serializeSongToChordPro(songModel),
+            body_plain: serializeSongToPlainText(songModel),
+            rawModel: songModel
+          });
+
+          loadedCount++;
+        } catch (err) {
+          console.warn('Error parsing opensong file:', file.name, err);
+        }
+      }
+
+      const statusBadge = document.getElementById('opensong-status-badge');
+      if (statusBadge) statusBadge.textContent = `Загружено файлов: ${processedOpenSongMap.size}`;
+
+      if (parsedDocxSongs.length > 0) {
+        currentSongIndex = parsedDocxSongs.length - loadedCount;
+        activeSongModel = parsedDocxSongs[currentSongIndex].rawModel;
+        undoStack = [{ data: JSON.stringify(activeSongModel), desc: 'Initial OpenSong Load', time: Date.now() }];
+        redoStack = [];
+        updateHistoryButtonsUI();
+        renderParsedSongsList();
+        renderInteractiveEditor(activeSongModel);
+        document.getElementById('btn-apply-docx-songs').disabled = false;
+      }
+
+      appendLog(`[Успех] Загружено ${loadedCount} песен OpenSong! Песни с существующим XML подсвечены зелёным цветом.`);
+      alert(`Успешно загружено ${loadedCount} файлов OpenSong!`);
+    }
+
+
+    // 1. DOCX CHORDS IMPORT EVENT HANDLERS (ENHANCED GEOMETRIC DP ENGINE)
+    // =========================================================================
+    const docxDropzone = document.getElementById('docx-dropzone');
+    const inputDocxChords = document.getElementById('input-docx-chords');
+    let chordsDocxFile = null;
+
+    docxDropzone.addEventListener('click', () => inputDocxChords.click());
+    docxDropzone.addEventListener('dragover', (e) => { e.preventDefault(); docxDropzone.classList.add('dragover'); });
+    docxDropzone.addEventListener('dragleave', () => docxDropzone.classList.remove('dragover'));
+    docxDropzone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      docxDropzone.classList.remove('dragover');
+      if (e.dataTransfer.files.length) handleDocxChordsSelected(e.dataTransfer.files[0]);
+    });
+    inputDocxChords.addEventListener('change', (e) => {
+      if (e.target.files.length) handleDocxChordsSelected(e.target.files[0]);
+    });
+
+    function handleDocxChordsSelected(file) {
+      chordsDocxFile = file;
+      document.getElementById('docx-file-name').textContent = file.name + ' (' + Math.round(file.size / 1024) + ' KB)';
+      document.getElementById('btn-parse-docx-chords').disabled = false;
+      appendLog(`[Файл выбран] ${file.name}. Нажмите «Запустить точный DP-парсинг».`);
+    }
+
+    function appendLog(msg) {
+      const log = document.getElementById('docx-log');
+      if (log) log.textContent += `\n[${new Date().toLocaleTimeString()}] ${msg}`;
+    }
+
+    // Direct Parsing of Pasted Song Text
+    document.getElementById('btn-parse-pasted-text')?.addEventListener('click', () => {
+      const rawText = document.getElementById('paste-text-input').value;
+      if (!rawText.trim()) {
+        alert('Пожалуйста, вставьте текст песни в поле ввода.');
+        return;
+      }
+      
+      const songModel = parseRawBlockToSongModel(rawText, '0001');
+      activeSongModel = songModel;
+      parsedDocxSongs = [{
+        id: songModel.id,
+        number: 1,
+        title: songModel.title,
+        key_default: songModel.key_default,
+        capo: songModel.capo,
+        tempo: songModel.tempo,
+        body_chordpro: serializeSongToChordPro(songModel),
+        body_plain: serializeSongToPlainText(songModel),
+        rawModel: songModel
+      }];
+
+      renderParsedSongsList();
+      renderInteractiveEditor(activeSongModel);
+      document.getElementById('btn-apply-docx-songs').disabled = false;
+      appendLog(`Успешно распознана вставленная песня: «${songModel.title}» (${songModel.lines.length} строк).`);
+    });
+
+    // Realign current song button
+    document.getElementById('btn-realign-current-song')?.addEventListener('click', () => {
+      if (!activeSongModel) {
+        alert('Нет выбранной песни для выравнивания.');
+        return;
+      }
+      realignSongModel(activeSongModel);
+      renderInteractiveEditor(activeSongModel);
+      updateAllLivePreviews();
+      alert('Автоматическое перевыравнивание выполнено!');
+    });
+
+    // Main Parse Button (DOCX)
+    document.getElementById('btn-parse-docx-chords').addEventListener('click', async () => {
+      if (!chordsDocxFile) return;
+      const log = document.getElementById('docx-log');
+      log.textContent = `[${new Date().toLocaleTimeString()}] Распаковка архива DOCX через JSZip...\n`;
+      
+      try {
+        const { songBlocks, allParagraphs } = await extractParagraphsFromDocx(chordsDocxFile);
+        log.textContent += `[${new Date().toLocaleTimeString()}] Извлечено ${allParagraphs.length} абзацев. Найдено ${songBlocks.length} секций песен.\n`;
+        
+        // TOC parsing
+        const tocMap = new Map();
+        const firstSongIdx = allParagraphs.findIndex(p => /^#\s/.test(p) || /^[0-9]+\.\s+[A-ZА-ЯЁ]/.test(p));
+        if (firstSongIdx > 0) {
+          const tocLines = allParagraphs.slice(0, firstSongIdx);
+          for (const line of tocLines) {
+            const m = line.match(/^(\d+)\.\s+(.*?)(?:\s*\[|\s*\^|\s*\(|$)/);
+            if (m) {
+              const num = parseInt(m[1], 10);
+              const title = m[2].trim();
+              tocMap.set(normalizeSongTitle(title), num);
+            }
+          }
+          log.textContent += `[${new Date().toLocaleTimeString()}] Оглавление распознано: найдено ${tocMap.size} названий с номерами.\n`;
+        }
+
+        parsedDocxSongs = [];
+
+        songBlocks.forEach((block, idx) => {
+          if (!block.trim()) return;
+
+          let number = null;
+          const numMatch = block.match(/^#?\s*(\d+)\./);
+          if (numMatch) {
+            number = parseInt(numMatch[1], 10);
+          }
+
+          const idStr = number !== null ? String(number).padStart(4, '0') : String(idx + 1).padStart(4, '0');
+          const songModel = parseRawBlockToSongModel(block, idStr);
+          if (!songModel) return;
+
+          if (number === null) {
+            const norm = normalizeSongTitle(songModel.title);
+            if (tocMap.has(norm)) {
+              number = tocMap.get(norm);
+              songModel.id = String(number).padStart(4, '0');
+              songModel.number = number;
+            }
+          }
+
+          const songObj = {
+            id: songModel.id,
+            number: songModel.number || (idx + 1),
+            title: songModel.title,
+            key_default: songModel.key_default,
+            capo: songModel.capo || '',
+            tempo: songModel.tempo || '',
+            alt_title: chordsDocxFile.name.replace('.docx', ''),
+            body_chordpro: serializeSongToChordPro(songModel),
+            body_plain: serializeSongToPlainText(songModel),
+            author: 'Огненный ветер',
+            album: 'Сборник DOCX',
+            rawModel: songModel
+          };
+
+          parsedDocxSongs.push(songObj);
+        });
+
+        if (parsedDocxSongs.length > 0) {
+          activeSongModel = parsedDocxSongs[0].rawModel;
+          renderParsedSongsList();
+          renderInteractiveEditor(activeSongModel);
+          document.getElementById('btn-apply-docx-songs').disabled = false;
+          log.textContent += `[Успех] Извлечено и оцифровано ${parsedDocxSongs.length} песен!\nПервая песня загружена в визуальный редактор.`;
+        }
+      } catch (err) {
+        log.textContent += `[ОШИБКА ПАРСИНГА] ${err.message}\n${err.stack}`;
+      }
+    });
+
+    /**
+     * Render the list of parsed songs for 1-click switching
+     */
+    function renderParsedSongsList() {
+      const container = document.getElementById('docx-parsed-songs-container');
+      const list = document.getElementById('parsed-songs-list');
+      const countEl = document.getElementById('parsed-songs-count');
+      if (!container || !list) return;
+
+      container.style.display = 'block';
+      countEl.textContent = parsedDocxSongs.length;
+      list.innerHTML = '';
+
+      parsedDocxSongs.forEach((song, idx) => {
+        const normId = String(song.id || idx + 1).padStart(4, '0');
+        const hasSavedXml = processedOpenSongMap.has(normId);
+
+        const item = document.createElement('div');
+        item.className = 'song-list-item' + (idx === currentSongIndex ? ' active' : '') + (hasSavedXml ? ' has-saved-xml' : '');
+        item.innerHTML = `
+          <div style="display: flex; align-items: center; gap: 0.3rem;">
+            <strong>${normId}. ${song.title}</strong>
+            <span style="font-size:0.75rem; color:var(--muted); margin-left:0.3rem;">${song.key_default ? 'Тон: ' + song.key_default : ''} ${song.capo ? 'Капо: ' + song.capo : ''}</span>
+            ${hasSavedXml ? '<span class="badge-xml-exists" title="Песня уже оцифрована и сохранена в OpenSong XML">✓ OpenSong</span>' : ''}
+          </div>
+          <span style="font-size:0.72rem; color:var(--info);">Править ➔</span>
+        `;
+
+        item.addEventListener('click', () => {
+          currentSongIndex = idx;
+          document.querySelectorAll('.song-list-item').forEach(el => el.classList.remove('active'));
+          item.classList.add('active');
+
+          if (song.rawModel) {
+            activeSongModel = song.rawModel;
+          } else {
+            activeSongModel = parseRawBlockToSongModel(song.body_chordpro, song.id);
+            song.rawModel = activeSongModel;
+          }
+
+          // Reset history for selected song
+          undoStack = [{ data: JSON.stringify(activeSongModel), desc: 'Open Song', time: Date.now() }];
+          redoStack = [];
+          updateHistoryButtonsUI();
+
+          renderInteractiveEditor(activeSongModel);
+        });
+
+        list.appendChild(item);
+      });
+    }
+
+    // Apply converted songs to general dbSongs catalog
+    
+    document.getElementById('btn-editor-edit-tags')?.addEventListener('click', () => {
+      if (!activeSongModel || !activeSongModel.id) {
+        alert('Выберите песню в списке слева для редактирования тэгов.');
+        return;
+      }
+      openEditModal(activeSongModel.id);
+    });
+
+    document.getElementById('btn-apply-docx-songs').addEventListener('click', async () => {
+      if (parsedDocxSongs.length === 0) return;
+      let added = 0;
+      let updated = 0;
+
+      // Sync active song edits back
+      if (activeSongModel && parsedDocxSongs[currentSongIndex]) {
+        parsedDocxSongs[currentSongIndex].title = activeSongModel.title;
+        parsedDocxSongs[currentSongIndex].key_default = activeSongModel.key_default;
+        parsedDocxSongs[currentSongIndex].capo = activeSongModel.capo;
+        parsedDocxSongs[currentSongIndex].tempo = activeSongModel.tempo;
+        parsedDocxSongs[currentSongIndex].body_chordpro = serializeSongToChordPro(activeSongModel);
+        parsedDocxSongs[currentSongIndex].body_plain = serializeSongToPlainText(activeSongModel);
+      }
+
+      parsedDocxSongs.forEach(newSong => {
+        const normNew = normalizeSongTitle(newSong.title);
+        const existingIdx = dbSongs.findIndex(s => 
+          (s.id === newSong.id && s.id !== '0000') || normalizeSongTitle(s.title) === normNew
+        );
+
+        if (existingIdx >= 0) {
+          dbSongs[existingIdx].body_chordpro = newSong.body_chordpro || dbSongs[existingIdx].body_chordpro;
+          dbSongs[existingIdx].body_plain = newSong.body_plain || dbSongs[existingIdx].body_plain;
+          if (newSong.key_default) dbSongs[existingIdx].key_default = newSong.key_default;
+          if (newSong.capo) dbSongs[existingIdx].capo = newSong.capo;
+          if (newSong.tempo) dbSongs[existingIdx].tempo = newSong.tempo;
+          updated++;
+        } else {
+          dbSongs.push(newSong);
+          added++;
+        }
+      });
+
+      await saveLocalState();
+      renderCatalog();
+      alert(`Слияние успешно завершено!\nОбновлено песен: ${updated}\nДобавлено новых песен: ${added}\nВсего в реестре: ${dbSongs.length}`);
+    });
+
+    // 2. DOCX / TXT ID ORDER PARSER & ASSIGNER
+    // ==========================================
+    const docxIdDropzone = document.getElementById('docx-id-dropzone');
+    const inputDocxIds = document.getElementById('input-docx-ids');
+    let idFile = null;
+
+    docxIdDropzone.addEventListener('click', () => inputDocxIds.click());
+    docxIdDropzone.addEventListener('dragover', (e) => { e.preventDefault(); docxIdDropzone.classList.add('dragover'); });
+    docxIdDropzone.addEventListener('dragleave', () => docxIdDropzone.classList.remove('dragover'));
+    docxIdDropzone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      docxIdDropzone.classList.remove('dragover');
+      if (e.dataTransfer.files.length) handleIdFileSelected(e.dataTransfer.files[0]);
+    });
+    inputDocxIds.addEventListener('change', (e) => {
+      if (e.target.files.length) handleIdFileSelected(e.target.files[0]);
+    });
+
+    function handleIdFileSelected(file) {
+      idFile = file;
+      document.getElementById('docx-id-file-name').textContent = file.name + ' (' + Math.round(file.size / 1024) + ' KB)';
+      document.getElementById('btn-parse-docx-ids').disabled = false;
+      document.getElementById('docx-id-log').textContent = `[Файл выбран] ${file.name}. Нажмите «Прочитать порядок выхода».`;
+    }
+
+    document.getElementById('btn-parse-docx-ids').addEventListener('click', async () => {
+      if (!idFile) return;
+      const log = document.getElementById('docx-id-log');
+      log.textContent = `[${new Date().toLocaleTimeString()}] Чтение файла порядка выхода...\n`;
+      
+      let lines = [];
+      if (idFile.name.endsWith('.docx')) {
+        const { allParagraphs } = await extractParagraphsFromDocx(idFile);
+        lines = allParagraphs;
+      } else {
+        const text = await idFile.text();
+        lines = text.split(/\r?\n/);
+      }
+
+      parsedIdList = [];
+      const tbody = document.getElementById('tbody-id-matches');
+      tbody.innerHTML = '';
+
+      for (const line of lines) {
         const trimmed = line.trim();
         if (!trimmed) continue;
         const m = trimmed.match(/^(\d+)[.\s]+(.*)$/);
         if (m) {
           const num = parseInt(m[1], 10);
           const rawTitle = m[2].trim();
-          const cleanTitle = cleanDocxTitle(rawTitle);
-          parsedDocxOrderList.push({
+          const cleanTitle = cleanSongTitle(rawTitle);
+          parsedIdList.push({
             id: String(num).padStart(4, '0'),
             number: num,
             title: cleanTitle
           });
         }
       }
-      logEl.textContent += `✓ Распознано ${parsedDocxOrderList.length} позиций порядка выхода с номерами.\n`;
-    }
 
-    // 2. Парсинг текстов и аккордов сборника (если файл указан)
-    parsedDocxSongs = [];
-    if (bookFile) {
-      logEl.textContent += `[${new Date().toLocaleTimeString()}] Распаковка DOCX сборника: ${bookFile.name}...\n`;
-      const { songBlocks, allParagraphs } = await extractParagraphsFromDocxFile(bookFile);
-      logEl.textContent += `✓ Извлечено ${allParagraphs.length} абзацев. Найдено ${songBlocks.length} секций песен.\n`;
+      log.textContent += `[${new Date().toLocaleTimeString()}] Распознано ${parsedIdList.length} номеров выхода.\n`;
 
-      songBlocks.forEach((block, idx) => {
-        if (!block.trim()) return;
-        let num = null;
-        const numMatch = block.match(/^#?\s*(\d+)\./);
-        if (numMatch) num = parseInt(numMatch[1], 10);
-
-        const idStr = num !== null ? String(num).padStart(4, '0') : String(idx + 1).padStart(4, '0');
-        const songObj = parseDocxSongBlock(block, idStr);
-        if (songObj) parsedDocxSongs.push(songObj);
-      });
-      logEl.textContent += `✓ Сформировано ${parsedDocxSongs.length} готовых песен из сборника.\n`;
-    }
-
-    // 3. Сопоставление с порядком выхода
-    if (parsedDocxOrderList.length > 0 && parsedDocxSongs.length > 0) {
-      logEl.textContent += `[${new Date().toLocaleTimeString()}] Интеллектуальное сопоставление сборника со списком порядка...\n`;
-      let matched = 0;
-      parsedDocxOrderList.forEach(orderItem => {
-        const found = findMatchingCatalogSong(orderItem.title, parsedDocxSongs);
+      let matchedCount = 0;
+      parsedIdList.forEach(item => {
+        const found = findBestMatchingSong(item.title, dbSongs);
         if (found) {
-          found.song.id = orderItem.id;
-          found.song.number = orderItem.number;
-          matched++;
+          item.matchedSong = found.song;
+          item.matchReason = found.reason;
+          matchedCount++;
         }
       });
-      logEl.textContent += `✓ Успешно сопоставлено номеров: ${matched} из ${parsedDocxOrderList.length}.\n`;
-    } else if (parsedDocxOrderList.length > 0 && parsedDocxSongs.length === 0) {
-      // Сопоставляем порядок с текущим реестром dbSongs
-      logEl.textContent += `[${new Date().toLocaleTimeString()}] Применение порядка к текущему реестру (${dbSongs.length} песен)...\n`;
-      let matched = 0;
-      parsedDocxOrderList.forEach(orderItem => {
-        const found = findMatchingCatalogSong(orderItem.title, dbSongs);
-        if (found) {
-          found.song.id = orderItem.id;
-          found.song.number = orderItem.number;
-          matched++;
+
+      parsedIdList.slice(0, 150).forEach(item => {
+        const tr = document.createElement('tr');
+        let statusHtml = '<span style="color:var(--muted);">Не найдена в базе</span>';
+        if (item.matchedSong) {
+          statusHtml = `<span style="color:var(--success); font-weight:600;">✓ #${item.matchedSong.id} ${item.matchedSong.title}</span> <span class="badge" style="font-size:0.7rem;">${item.matchReason}</span>`;
+        }
+        tr.innerHTML = `
+          <td><strong>#${item.id}</strong></td>
+          <td>${item.title}</td>
+          <td>${statusHtml}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+
+      log.textContent += `[Сопоставление] Совпало с текущей базой: ${matchedCount} песен.\n`;
+      document.getElementById('btn-apply-docx-ids').disabled = false;
+    });
+
+    document.getElementById('btn-apply-docx-ids').addEventListener('click', async () => {
+      if (parsedIdList.length === 0) return;
+      let assigned = 0;
+      const usedIds = new Map(); // id -> song
+      const collisions = [];
+
+      // Предварительная проверка: кто уже владеет этими ID в базе
+      dbSongs.forEach(s => {
+        if (s.id) usedIds.set(s.id, s);
+      });
+      
+      parsedIdList.forEach(item => {
+        const song = item.matchedSong || (findBestMatchingSong(item.title, dbSongs)?.song);
+        if (song) {
+          const targetId = item.id;
+          // Проверяем коллизию двойного назначения
+          if (usedIds.has(targetId) && usedIds.get(targetId) !== song) {
+            const conflictSong = usedIds.get(targetId);
+            collisions.push(`ID #${targetId} («${item.title}») конфликтует с существующей песней #${conflictSong.id} «${conflictSong.title}»`);
+          }
+          // Освобождаем старый ID песни
+          if (song.id) usedIds.delete(song.id);
+          song.id = targetId;
+          song.number = item.number;
+          usedIds.set(targetId, song);
+          assigned++;
         }
       });
-      logEl.textContent += `✓ Обновлены ID у ${matched} существующих песен реестра.\n`;
-    }
 
-    document.getElementById('btn-apply-docx-to-catalog').disabled = false;
-    logEl.textContent += `\n[ГОТОВО К СЛИЯНИЮ] Нажмите «Загрузить результат в Реестр песен».`;
-  } catch(err) {
-    logEl.textContent += `\n[ОШИБКА] ${err.message}\n${err.stack}`;
-  }
-});
-
-
-document.getElementById('btn-apply-docx-to-catalog')?.addEventListener('click', async () => {
-  let updated = 0;
-  let added = 0;
-
-  if (parsedDocxSongs.length > 0) {
-    // 1. Сначала сопоставляем по названию с существующим каталогом
-    parsedDocxSongs.forEach(newSong => {
-      const match = findMatchingCatalogSong(newSong.title, dbSongs, newSong.lyrics);
-      if (match) {
-        // Обновляем существующую каноническую песню
-        if (newSong.lyrics && newSong.lyrics.trim().length > 15) {
-          match.song.lyrics = newSong.lyrics;
-          match.song.chordpro = newSong.chordpro;
-        }
-        if (newSong.key) match.song.key = newSong.key;
-        if (newSong.capo) match.song.capo = newSong.capo;
-        updated++;
+      await saveLocalState();
+      if (collisions.length > 0) {
+        alert(`Присвоено ID для ${assigned} песен, но обнаружено ${collisions.length} коллизий двойных ID:\n` + collisions.slice(0, 10).join('\n') + (collisions.length > 10 ? `\n...и ещё ${collisions.length - 10}` : ''));
       } else {
-        // Проверяем, не занят ли ID
-        let targetId = String(newSong.id || '').padStart(4, '0');
-        const idExists = dbSongs.some(s => String(s.id).padStart(4, '0') === targetId);
-        if (idExists || !targetId || targetId === '0000') {
-          // Ищем минимальный свободный ID от 0001 до 0700
-          for (let i = 1; i <= 999; i++) {
-            const candidate = String(i).padStart(4, '0');
-            if (!dbSongs.some(s => String(s.id).padStart(4, '0') === candidate)) {
-              targetId = candidate;
-              break;
-            }
-          }
-        }
-        newSong.id = targetId;
-        newSong.number = parseInt(targetId, 10);
-        dbSongs.push(newSong);
-        added++;
+        alert(`Успешно присвоены уникальные 4-значные ID выхода для ${assigned} песен!\nКоллизий и дубликатов ID не обнаружено.`);
       }
     });
 
-    // 2. Устраняем случайные дубликаты ID
-    const seenIds = new Set();
-    dbSongs.forEach((song, idx) => {
-      let sId = String(song.id || '').padStart(4, '0');
-      if (seenIds.has(sId) || !sId || sId === '0000') {
-        for (let i = 1; i <= 999; i++) {
-          const candidate = String(i).padStart(4, '0');
-          if (!seenIds.has(candidate) && !dbSongs.some(s => s !== song && String(s.id).padStart(4, '0') === candidate)) {
-            sId = candidate;
-            break;
-          }
-        }
-        song.id = sId;
-        song.number = parseInt(sId, 10);
-      }
-      seenIds.add(sId);
-    });
-
-    // Сортируем базу по возрастанию ID
-    dbSongs.sort((a, b) => (parseInt(a.id, 10) || 0) - (parseInt(b.id, 10) || 0));
-  }
-
-  await saveLocalState();
-  renderCatalog();
-  populateEditorSongSelector();
-  alert(`✓ Импорт DOCX завершен!\nОбновлено песен: ${updated}\nДобавлено новых песен: ${added}\nВсего в реестре: ${dbSongs.length}`);
-});
-
+    // ==========================================
+    // 3. CATALOG RENDERING & EDITING
+    // ==========================================
+    
 
 // ==========================================
 // 6. ПРЕОБРАЗОВАНИЕ АУДИО
