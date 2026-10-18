@@ -2108,48 +2108,68 @@ function normalizeDocxTitle(str) {
 function cleanDocxTitle(rawTitle) {
   if (!rawTitle) return 'Без названия';
   let t = rawTitle.trim();
+  // Если строка начинается с аккордов (например "Am   Dm   E"), не берем ее как название
+  if (/^[A-H][b#]?(?:m|maj|min|dim|aug|sus)?\d*(?:\s+[A-H][b#]?(?:m|maj|min|dim|aug|sus)?\d*)+$/.test(t)) {
+    return 'Без названия';
+  }
   t = t.replace(/^#?\s*\d+[.\s]+/, '');
+  // Срезаем транспозицию в скобках (+1), (+2), (+0), (-1) и т.д.
+  t = t.replace(/\s*\([+-]?\d+\)\s*$/i, '');
+  // Срезаем ссылки на тональность или комментарии в скобках
   t = t.replace(/\s*\([A-ZА-ЯЁ0-9#b\/\s,.-]+\)$/i, '');
   t = t.replace(/\s*\[.*?\]/g, '');
   t = t.replace(/[«»"']/g, '');
   return t.trim() || 'Без названия';
 }
 
-function findMatchingCatalogSong(queryTitle, catalog) {
+function findMatchingCatalogSong(queryTitle, catalog, songLyrics = '') {
   if (!queryTitle) return null;
-  const nq = normalizeDocxTitle(queryTitle);
-  if (!nq) return null;
+  const cleanQ = cleanDocxTitle(queryTitle);
+  const nq = normalizeDocxTitle(cleanQ);
+  if (!nq || nq === 'без названия') return null;
 
   // 1. Точное совпадение
-  let match = catalog.find(s => normalizeDocxTitle(s.title) === nq);
+  let match = catalog.find(s => normalizeDocxTitle(cleanDocxTitle(s.title)) === nq);
   if (match) return { song: match, score: 100, reason: 'Точное' };
 
-  // 2. Без псалмов (Пс. 82)
-  const qNoPs = nq.replace(/\bпс\s*\d+\b/g, '').replace(/\s+/g, ' ').trim();
-  if (qNoPs.length >= 4) {
+  // 2. Без псалмов (Пс. 82) и ссылок
+  const qNoPs = nq.replace(/\b(?:пс|1кор|2кор|рим|евр|ис|наум)\s*\d+(?:[,.:]\d+)*\b/gi, '').replace(/\s+/g, ' ').trim();
+  if (qNoPs.length >= 3) {
     match = catalog.find(s => {
-      const tNorm = normalizeDocxTitle(s.title);
-      const tNoPs = tNorm.replace(/\bпс\s*\d+\b/g, '').replace(/\s+/g, ' ').trim();
-      return tNoPs === qNoPs || tNoPs.startsWith(qNoPs) || qNoPs.startsWith(tNoPs);
+      const tNorm = normalizeDocxTitle(cleanDocxTitle(s.title));
+      const tNoPs = tNorm.replace(/\b(?:пс|1кор|2кор|рим|евр|ис|наум)\s*\d+(?:[,.:]\d+)*\b/gi, '').replace(/\s+/g, ' ').trim();
+      return tNoPs === qNoPs || (tNoPs.length > 5 && (tNoPs.startsWith(qNoPs) || qNoPs.startsWith(tNoPs)));
     });
     if (match) return { song: match, score: 85, reason: 'По началу / Псалму' };
   }
 
-  // 3. Совпадение по отдельным словам
+  // 3. Совпадение по отдельным словам (Jaccard similarity)
   const qWords = qNoPs.split(' ').filter(w => w.length > 2);
   if (qWords.length > 0) {
     let best = null;
     let maxOverlap = 0;
     for (const s of catalog) {
-      const tWords = normalizeDocxTitle(s.title).split(' ').filter(w => w.length > 2);
+      const tNorm = normalizeDocxTitle(cleanDocxTitle(s.title));
+      const tWords = tNorm.split(' ').filter(w => w.length > 2);
       const overlap = qWords.filter(w => tWords.includes(w)).length;
       if (overlap > maxOverlap && overlap >= Math.min(2, qWords.length)) {
         maxOverlap = overlap;
         best = s;
       }
     }
-    if (best) return { song: best, score: 60, reason: 'По словам' };
+    if (best && maxOverlap >= 2) return { song: best, score: 65, reason: 'По словам' };
   }
+
+  // 4. Поиск названия в первой строчке текста (если кусок куплета взят как название)
+  if (songLyrics && songLyrics.length > 10) {
+    const firstLines = songLyrics.toLowerCase().substring(0, 150);
+    const textMatch = catalog.find(s => {
+      const tNorm = normalizeDocxTitle(s.title);
+      return tNorm.length > 4 && firstLines.includes(tNorm);
+    });
+    if (textMatch) return { song: textMatch, score: 60, reason: 'По тексту песни' };
+  }
+
   return null;
 }
 
@@ -2212,6 +2232,9 @@ function parseDocxSongBlock(block, defaultId = '0001') {
   for (let i = 0; i < lines.length; i++) {
     const l = lines[i].trim();
     if (!l) continue;
+    // Пропускаем строки аккордов
+    if (/^[A-H][b#]?(?:m|maj|min|dim|aug|sus)?\d*(?:\s+[A-H][b#]?(?:m|maj|min|dim|aug|sus)?\d*)+$/.test(l)) continue;
+
     if (/^#?\s*\d*\.?\s*[A-ZА-ЯЁ]/.test(l)) {
       title = cleanDocxTitle(l);
       headerEndIdx = i + 1;
@@ -2338,21 +2361,65 @@ document.getElementById('btn-process-docx-bundle')?.addEventListener('click', as
   }
 });
 
+
 document.getElementById('btn-apply-docx-to-catalog')?.addEventListener('click', async () => {
   let updated = 0;
   let added = 0;
 
   if (parsedDocxSongs.length > 0) {
+    // 1. Сначала сопоставляем по названию с существующим каталогом
     parsedDocxSongs.forEach(newSong => {
-      const existing = dbSongs.find(s => String(s.id).padStart(4, '0') === String(newSong.id).padStart(4, '0') || normalizeDocxTitle(s.title) === normalizeDocxTitle(newSong.title));
-      if (existing) {
-        Object.assign(existing, newSong);
+      const match = findMatchingCatalogSong(newSong.title, dbSongs, newSong.lyrics);
+      if (match) {
+        // Обновляем существующую каноническую песню
+        if (newSong.lyrics && newSong.lyrics.trim().length > 15) {
+          match.song.lyrics = newSong.lyrics;
+          match.song.chordpro = newSong.chordpro;
+        }
+        if (newSong.key) match.song.key = newSong.key;
+        if (newSong.capo) match.song.capo = newSong.capo;
         updated++;
       } else {
+        // Проверяем, не занят ли ID
+        let targetId = String(newSong.id || '').padStart(4, '0');
+        const idExists = dbSongs.some(s => String(s.id).padStart(4, '0') === targetId);
+        if (idExists || !targetId || targetId === '0000') {
+          // Ищем минимальный свободный ID от 0001 до 0700
+          for (let i = 1; i <= 999; i++) {
+            const candidate = String(i).padStart(4, '0');
+            if (!dbSongs.some(s => String(s.id).padStart(4, '0') === candidate)) {
+              targetId = candidate;
+              break;
+            }
+          }
+        }
+        newSong.id = targetId;
+        newSong.number = parseInt(targetId, 10);
         dbSongs.push(newSong);
         added++;
       }
     });
+
+    // 2. Устраняем случайные дубликаты ID
+    const seenIds = new Set();
+    dbSongs.forEach((song, idx) => {
+      let sId = String(song.id || '').padStart(4, '0');
+      if (seenIds.has(sId) || !sId || sId === '0000') {
+        for (let i = 1; i <= 999; i++) {
+          const candidate = String(i).padStart(4, '0');
+          if (!seenIds.has(candidate) && !dbSongs.some(s => s !== song && String(s.id).padStart(4, '0') === candidate)) {
+            sId = candidate;
+            break;
+          }
+        }
+        song.id = sId;
+        song.number = parseInt(sId, 10);
+      }
+      seenIds.add(sId);
+    });
+
+    // Сортируем базу по возрастанию ID
+    dbSongs.sort((a, b) => (parseInt(a.id, 10) || 0) - (parseInt(b.id, 10) || 0));
   }
 
   await saveLocalState();
